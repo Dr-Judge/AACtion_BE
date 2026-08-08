@@ -1,4 +1,4 @@
-package com.likelion.drjudge.judgment.exception;
+package com.likelion.drjudge.domain.judgment.exception;
 
 import com.likelion.drjudge.global.exception.ErrorCode;
 import lombok.Getter;

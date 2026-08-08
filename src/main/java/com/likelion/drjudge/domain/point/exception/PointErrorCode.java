@@ -1,4 +1,4 @@
-package com.likelion.drjudge.share.exception;
+package com.likelion.drjudge.domain.point.exception;
 
 import com.likelion.drjudge.global.exception.ErrorCode;
 import lombok.Getter;
@@ -7,9 +7,9 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
-public enum ShareErrorCode implements ErrorCode {
+public enum PointErrorCode implements ErrorCode {
 
-    SHARE_LINK_NOT_FOUND("SHARE_001", "존재하지 않거나 회수된 공유링크입니다.", HttpStatus.NOT_FOUND);
+    ALREADY_CHECKED_IN_TODAY("POINT_001", "이미 오늘 출석체크를 완료했습니다.", HttpStatus.CONFLICT);
 
     private final String code;
     private final String message;
