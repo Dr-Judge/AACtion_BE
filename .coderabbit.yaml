@@ -28,8 +28,6 @@ reviews:
     - "!gradle/**"
     - "!**/generated/**"
     - "!**/*.lock"
-    - "src/main/**"
-    - "src/test/**"
 
   path_instructions:
     - path: "src/main/java/**/controller/**"
