@@ -5,9 +5,13 @@ import com.likelion.drjudge.global.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.UUID;
 
@@ -22,8 +26,8 @@ public class GlobalExceptionHandler {
         ErrorCode errorCode = exception.getErrorCode();
         String traceId = UUID.randomUUID().toString();
 
-        log.warn("event=exception_handled reason={}, code={}, message={}, traceId={}, details={}",
-                errorCode, errorCode.getCode(), exception.getMessage(), traceId, exception.getContext());
+        log.warn("event=exception_handled reason={}, code={}, message={}, traceId={}",
+                errorCode, errorCode.getCode(), exception.getMessage(), traceId);
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 errorCode.getHttpStatus().value(), errorCode.getCode(), errorCode.getMessage(),
@@ -44,6 +48,24 @@ public class GlobalExceptionHandler {
         ErrorResponse errorResponse = ErrorResponse.of(
                 CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
                 CommonErrorCode.INVALID_INPUT_VALUE.getCode(), message, request.getRequestURI());
+
+        return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
+                .body(ApiResponse.error(errorResponse));
+    }
+
+    @ExceptionHandler({
+            HttpMessageNotReadableException.class,
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class,
+            HandlerMethodValidationException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleBadRequestException(
+            Exception exception, HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.of(
+                CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
+                CommonErrorCode.INVALID_INPUT_VALUE.getCode(),
+                CommonErrorCode.INVALID_INPUT_VALUE.getMessage(), request.getRequestURI());
 
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
                 .body(ApiResponse.error(errorResponse));
