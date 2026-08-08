@@ -1,0 +1,10 @@
+build/
+.gradle/
+.idea/
+*.iml
+.git/
+.env
+.env.*
+application-secret.yml
+application-secret.yaml
+docs/

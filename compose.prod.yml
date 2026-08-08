@@ -1,0 +1,37 @@
+services:
+  app:
+    image: ghcr.io/dr-judge/aaction_be:latest
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
+      DB_HOST: mysql
+      DB_NAME: drjudge
+      DB_USERNAME: drjudge
+      DB_PASSWORD: ${DB_PASSWORD}
+      JPA_DDL_AUTO: validate
+      JWT_SECRET: ${JWT_SECRET}
+      FLYWAY_OUT_OF_ORDER: "false"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: drjudge
+      MYSQL_USER: drjudge
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-p${DB_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mysql_data:

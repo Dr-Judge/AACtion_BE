@@ -1,0 +1,115 @@
+language: "ko-KR"
+
+tone_instructions: >
+  간결하고 단호하게 리뷰한다.
+  운영 장애 가능성, 데이터 정합성, 보안 리스크를 우선 지적한다.
+  단순 스타일 지적보다 요구사항 위반, 트랜잭션 경계, JPA 쿼리 문제를 우선한다.
+  지적 시 반드시 사유와 권장 대안을 함께 제시한다.
+
+reviews:
+  profile: "assertive"
+  high_level_summary: true
+  poem: false
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    ignore_title_keywords:
+      - "WIP"
+      - "draft"
+
+  path_filters:
+    - "!build/**"
+    - "!.gradle/**"
+    - "!gradle/**"
+    - "!**/generated/**"
+    - "!**/*.lock"
+    - "src/main/**"
+    - "src/test/**"
+
+  path_instructions:
+    - path: "src/main/java/**/controller/**"
+      instructions: |
+        - 인증/인가 누락을 최우선으로 확인한다. 특히 판정 요청 API는 비회원 접근이 절대 허용되면 안 된다(로그인 리다이렉트 필요).
+        - request DTO에 @Valid 누락 여부를 확인한다.
+        - pagination(피드 목록, 판정 이력)의 기본값과 최대값 제한을 확인한다.
+        - 응답 스펙이 공통 응답 포맷({ success, data, error })을 유지하는지 확인한다.
+        - Controller에 비즈니스 로직, 쿼리 조립 로직이 들어가지 않았는지 확인한다.
+
+    - path: "src/main/java/**/service/**"
+      instructions: |
+        - @Transactional 경계가 적절한지, readOnly 누락은 없는지 확인한다.
+        - 외부 API(LLM 판정, OCR, 카카오 로그인) 호출의 실패·타임아웃 처리를 확인한다.
+        - 일일 판정 요청 한도 체크 로직이 정확한지 확인한다(아카이브 재사용도 한도에 포함, 이력 단순 조회는 미포함).
+        - OCR/링크 추출 텍스트에 PII 마스킹이 판정 엔진 전달 전에 적용되는지 확인한다.
+        - 공유 링크 토큰이 순차 ID나 예측 가능한 값이 아니라 암호학적으로 안전한 랜덤 값으로 생성되는지 확인한다.
+        - JPA lazy loading이 트랜잭션 밖에서 발생할 가능성을 확인한다.
+
+    - path: "src/main/java/**/repository/**"
+      instructions: |
+        - N+1 쿼리 가능성을 최우선으로 확인한다. Fetch Join, EntityGraph, BatchSize 활용 여부를 확인한다.
+        - findAll()의 무분별한 사용을 지적한다.
+        - pagination과 정렬 기준이 안정적이고 재현 가능한지 확인한다.
+        - 아카이브 유사도 매칭처럼 대량 비교가 필요한 쿼리의 성능(인덱스 사용 여부)을 확인한다.
+        - native query 사용 시 SQL injection, index 사용 가능성을 확인한다.
+
+    - path: "src/main/java/**/entity/**"
+      instructions: |
+        - 무분별한 public setter, @Setter 사용을 지적한다.
+        - 상태 변경 로직이 엔티티 내부에 캡슐화돼 있는지 확인한다.
+        - 회원 탈퇴 시 CASCADE 삭제 매핑이 요구사항과 일치하는지 확인한다 — 개인 데이터(judgments, feed_posts 등)는 CASCADE, archive_items는 users를 참조하지 않아야 한다.
+        - trust_level, category 등 문자열 기반 값이 애플리케이션 레벨에서 유효성 검증되는지 확인한다(DB는 VARCHAR라 강제하지 않음).
+
+    - path: "src/main/java/**/dto/**"
+      instructions: |
+        - request/response DTO는 record 사용을 우선 권장한다.
+        - @NotNull, @NotBlank, @Size 등 validation 누락을 확인한다.
+        - 판정 결과 응답에 확신도(%) 등 수치형 확신도가 노출되지 않는지 확인한다 — 이 프로젝트는 확신도 표시를 명시적으로 금지한다.
+        - 응답 DTO에 카카오 토큰, 내부 ID, PII 등 민감 정보가 노출되지 않는지 확인한다.
+        - Entity를 API 응답으로 직접 반환하지 않는지 확인한다.
+
+    - path: "src/main/java/**/security/**"
+      instructions: |
+        - 카카오 OAuth 토큰 검증, JWT 발급/검증, refresh 흐름을 집중 리뷰한다.
+        - 로그에 credential, token, PII가 남지 않는지 확인한다.
+        - 판정/마이페이지 등 회원 전용 API에 비회원 접근을 막는 필터가 실제로 걸려있는지 확인한다.
+        - SecurityConfig의 requestMatchers 순서와 permitAll 범위를 확인한다(actuator/health 등 최소한만 permitAll).
+
+    - path: "src/main/java/**/{config,global,common}/**"
+      instructions: |
+        - 공통 인프라 변경은 모든 도메인에 영향을 미치므로 영향 범위를 확인한다.
+        - 예외 코드 추가 시 HTTP status, 메시지 일관성을 확인한다.
+        - 전역 예외 처리 변경이 기존 흐름과 호환되는지 확인한다.
+
+    - path: "src/main/resources/db/migration/**"
+      instructions: |
+        - 이미 머지된 마이그레이션 파일 수정/삭제 여부를 확인한다(체크섬 불일치로 validate 실패 원인).
+        - 담당자별 버전 레인(V2~V4)을 지켰는지 확인한다.
+        - 1파일 1논리변경 원칙을 지켰는지 확인한다(V1 baseline 제외).
+        - MySQL에서 지원하지 않는 문법(예: ADD COLUMN IF NOT EXISTS)이 없는지 확인한다.
+
+    - path: "src/test/java/**"
+      instructions: |
+        - happy path 외 실패 케이스, 권한 실패 케이스가 있는지 확인한다.
+        - 판정 라벨 5종(특히 판단보류/반박 근거 있음)을 커버하는 테스트가 있는지 확인한다.
+        - @BeforeEach에서 테스트 격리가 보장되는지 확인한다.
+
+    - path: "**/application*.{yaml,yml,properties}"
+      instructions: |
+        - credentials, API key, secret이 평문으로 노출되지 않는지 확인한다.
+        - 환경 변수 참조(${VAR})에 안전하지 않은 기본값이 있는지 확인한다.
+        - show-sql, format_sql이 운영 profile에서 켜져 있지 않은지 확인한다.
+
+    - path: "**/build.gradle*"
+      instructions: |
+        - 의존성 추가 시 보안 취약점, 버전 충돌 가능성을 확인한다.
+        - 불필요하게 무거운 라이브러리 추가를 지적한다.
+
+    - path: "**/.env*"
+      instructions: |
+        - .env 파일이 .gitignore에 포함되어 있는지 반드시 확인한다.
+        - 실제 credentials가 커밋된 경우 즉시 지적한다.

@@ -1,0 +1,71 @@
+# Compiled class file
+*.class
+
+# Log file
+*.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+
+# Local environment and OS files
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Secrets — 절대 커밋 금지. 실제 값은 로컬 application-secret.yaml 에만 둔다.
+# (운영은 EC2의 운영용 .env 파일에서 docker compose가 환경변수로 주입 — 이 .env도 서버에만 존재, 커밋 금지)
+# .yml 패턴도 남겨둔다: 구 확장자 파일이 로컬에 남아 있어도 커밋되지 않게 하기 위함.
+application-secret.yml
+application-secret.yaml
+application-*-secret.yml
+application-*-secret.yaml
+!application-secret.yml.example
+!application-secret.yaml.example
+
+# 비밀값 파일의 백업·사본이 새어나가는 것 방지(application-secret.yml.bak 등).
+# 실제로 커밋 직전까지 갔던 사고가 있었다 — .gitignore가 원본만 막고 .bak은 안 막았다.
+*.bak
+*.orig
+
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# Claude Code 로컬 설정 (개발자 개인 환경 — 하드코딩 경로 등 포함, 공유 대상 아님)
+.claude/
