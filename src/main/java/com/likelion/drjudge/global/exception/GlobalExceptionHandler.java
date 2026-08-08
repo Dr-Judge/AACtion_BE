@@ -56,11 +56,36 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class,
-            MissingServletRequestParameterException.class,
-            HandlerMethodValidationException.class
+            MissingServletRequestParameterException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleBadRequestException(
             Exception exception, HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.of(
+                CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
+                CommonErrorCode.INVALID_INPUT_VALUE.getCode(),
+                CommonErrorCode.INVALID_INPUT_VALUE.getMessage(), request.getRequestURI());
+
+        return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
+                .body(ApiResponse.error(errorResponse));
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHandlerMethodValidationException(
+            HandlerMethodValidationException exception, HttpServletRequest request) {
+
+        if (exception.isForReturnValue()) {
+            String traceId = UUID.randomUUID().toString();
+            log.error("event=return_value_validation_failed traceId={}", traceId, exception);
+
+            ErrorResponse errorResponse = ErrorResponse.of(
+                    CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus().value(),
+                    CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                    CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage(), request.getRequestURI());
+
+            return ResponseEntity.status(CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
+                    .body(ApiResponse.error(errorResponse));
+        }
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
