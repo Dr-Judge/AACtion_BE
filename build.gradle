@@ -27,6 +27,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     // MySQL 8 버전이상, MariaDB 사용
     implementation("org.flywaydb:flyway-mysql:10.8.1")
+    implementation("org.flywaydb:flyway-core:10.8.1")
+    implementation 'org.springframework.boot:spring-boot-flyway'
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'com.mysql:mysql-connector-j'
     annotationProcessor 'org.projectlombok:lombok'
