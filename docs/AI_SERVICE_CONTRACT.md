@@ -19,7 +19,7 @@
 
 **핵심 원칙**: Python이 받는 입력은 항상 **순수 텍스트**다. 원본이 TEXT/IMAGE/LINK 무엇이었든, Spring이 OCR·메타데이터 추출로 정규화를 끝낸 뒤에만 Python을 호출한다. Python은 `inputType`을 알 필요도, 이미지/URL을 직접 다룰 필요도 없다.
 
-```
+```text
 TEXT  ──────────────┐
 IMAGE → Clova OCR ───┼─→ 순수 텍스트 ──→ Python (RAG + Gemini)
 LINK  → 메타데이터/자막 추출 ┘
@@ -29,7 +29,7 @@ LINK  → 메타데이터/자막 추출 ┘
 
 ## 2. 엔드포인트
 
-```
+```http
 POST /internal/api/v1/judgments
 ```
 
@@ -121,7 +121,7 @@ Python이 자체 벡터스토어(Chroma, 로컬 persistent client)를 소유한�
 
 이번 프로젝트는 Python 쪽 도메인이 "판정" 하나뿐이라, Port/Adapter 같은 인터페이스 계층은 두지 않는다. 대신 역할만 분리한다.
 
-```
+```text
 app/
 ├── llm/            # 공용 연결 팩토리 — 키/타임아웃/모델명만, 계약 없음
 ├── judgment/        # 도메인 로직 — 프롬프트, RAG 오케스트레이션, 응답 파싱
