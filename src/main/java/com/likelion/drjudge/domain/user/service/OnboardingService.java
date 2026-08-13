@@ -3,6 +3,7 @@ package com.likelion.drjudge.domain.user.service;
 import com.likelion.drjudge.domain.category.entity.Category;
 import com.likelion.drjudge.domain.category.repository.CategoryRepository;
 import com.likelion.drjudge.domain.user.dto.request.OnboardingRequest;
+import com.likelion.drjudge.domain.user.dto.request.OnboardingUpdateRequest;
 import com.likelion.drjudge.domain.user.dto.response.OnboardingResponse;
 import com.likelion.drjudge.domain.user.entity.User;
 import com.likelion.drjudge.domain.user.exception.UserErrorCode;
@@ -36,7 +37,7 @@ public class OnboardingService {
 
     /** PATCH /users/me/onboarding — 전달된 필드만 부분 수정. */
     @Transactional
-    public OnboardingResponse updateOnboarding(Long userId, OnboardingRequest request) {
+    public OnboardingResponse updateOnboarding(Long userId, OnboardingUpdateRequest request) {
         User user = getUser(userId);
 
         if (request.interestCategoryCodes() != null) {
@@ -60,7 +61,7 @@ public class OnboardingService {
     private Set<Category> resolveCategories(List<String> codes) {
         Set<Category> categories = new HashSet<>(categoryRepository.findByCodeIn(codes));
         if (categories.size() != new HashSet<>(codes).size()) {
-            throw new BusinessException(UserErrorCode.INVALID_CATEGORY);
+            throw new BusinessException(UserErrorCode.INVALID_CATEGORY, codes);
         }
         return categories;
     }
