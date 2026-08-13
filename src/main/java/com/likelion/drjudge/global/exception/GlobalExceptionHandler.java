@@ -1,5 +1,6 @@
 package com.likelion.drjudge.global.exception;
 
+import com.likelion.drjudge.domain.jwt.filter.TraceIdFilter;
 import com.likelion.drjudge.global.response.ApiResponse;
 import com.likelion.drjudge.global.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,21 +14,23 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-import java.util.UUID;
-
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private String traceIdOf(HttpServletRequest request) {
+        return (String) request.getAttribute(TraceIdFilter.TRACE_ID);
+    }
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(
             BusinessException exception, HttpServletRequest request) {
 
         ErrorCode errorCode = exception.getErrorCode();
-        String traceId = UUID.randomUUID().toString();
+        String traceId = traceIdOf(request);
 
-        log.warn("event=exception_handled reason={}, code={}, message={}, traceId={}",
-                errorCode, errorCode.getCode(), exception.getMessage(), traceId);
+        log.warn("event=exception_handled reason={}, code={}, message={}, traceId={}, details={}",
+                errorCode, errorCode.getCode(), exception.getMessage(), traceId, exception.getContext());
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 errorCode.getHttpStatus().value(), errorCode.getCode(), errorCode.getMessage(),
@@ -45,6 +48,10 @@ public class GlobalExceptionHandler {
                 .map(fieldError -> fieldError.getField() + ": " + fieldError.getDefaultMessage())
                 .orElse(CommonErrorCode.INVALID_INPUT_VALUE.getMessage());
 
+        log.warn("event=exception_handled reason={}, code={}, message={}, traceId={}",
+                CommonErrorCode.INVALID_INPUT_VALUE, CommonErrorCode.INVALID_INPUT_VALUE.getCode(),
+                message, traceIdOf(request));
+
         ErrorResponse errorResponse = ErrorResponse.of(
                 CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
                 CommonErrorCode.INVALID_INPUT_VALUE.getCode(), message, request.getRequestURI());
@@ -61,6 +68,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleBadRequestException(
             Exception exception, HttpServletRequest request) {
 
+        log.warn("event=exception_handled reason={}, code={}, message={}, traceId={}",
+                CommonErrorCode.INVALID_INPUT_VALUE, CommonErrorCode.INVALID_INPUT_VALUE.getCode(),
+                exception.getMessage(), traceIdOf(request));
+
         ErrorResponse errorResponse = ErrorResponse.of(
                 CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
                 CommonErrorCode.INVALID_INPUT_VALUE.getCode(),
@@ -74,8 +85,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleHandlerMethodValidationException(
             HandlerMethodValidationException exception, HttpServletRequest request) {
 
+        String traceId = traceIdOf(request);
+
         if (exception.isForReturnValue()) {
-            String traceId = UUID.randomUUID().toString();
             log.error("event=return_value_validation_failed traceId={}", traceId, exception);
 
             ErrorResponse errorResponse = ErrorResponse.of(
@@ -86,6 +98,9 @@ public class GlobalExceptionHandler {
             return ResponseEntity.status(CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
                     .body(ApiResponse.error(errorResponse));
         }
+
+        log.warn("event=exception_handled reason={}, code={}, traceId={}",
+                CommonErrorCode.INVALID_INPUT_VALUE, CommonErrorCode.INVALID_INPUT_VALUE.getCode(), traceId);
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
@@ -100,7 +115,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleException(
             Exception exception, HttpServletRequest request) {
 
-        String traceId = UUID.randomUUID().toString();
+        String traceId = traceIdOf(request);
         log.error("event=unhandled_exception traceId={}", traceId, exception);
 
         ErrorResponse errorResponse = ErrorResponse.of(
