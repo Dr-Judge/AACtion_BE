@@ -1,4 +1,4 @@
-package com.likelion.drjudge.domain.user.exception;
+package com.likelion.drjudge.domain.category.exception;
 
 import com.likelion.drjudge.global.exception.ErrorCode;
 import lombok.Getter;
@@ -7,10 +7,9 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
-public enum UserErrorCode implements ErrorCode {
+public enum CategoryErrorCode implements ErrorCode {
 
-    USER_NOT_FOUND("USER_001", "존재하지 않는 사용자입니다.", HttpStatus.NOT_FOUND),
-    ALREADY_WITHDRAWN("USER_002", "이미 탈퇴한 사용자입니다.", HttpStatus.CONFLICT);
+    INVALID_CATEGORY("CATEGORY_001", "존재하지 않는 관심 카테고리 코드입니다.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;

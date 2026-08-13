@@ -15,6 +15,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.likelion.drjudge.domain.category.exception.CategoryErrorCode;
 
 @Service
 @RequiredArgsConstructor
@@ -61,7 +62,7 @@ public class OnboardingService {
     private Set<Category> resolveCategories(List<String> codes) {
         Set<Category> categories = new HashSet<>(categoryRepository.findByCodeIn(codes));
         if (categories.size() != new HashSet<>(codes).size()) {
-            throw new BusinessException(UserErrorCode.INVALID_CATEGORY, codes);
+            throw new BusinessException(CategoryErrorCode.INVALID_CATEGORY, codes);
         }
         return categories;
     }
