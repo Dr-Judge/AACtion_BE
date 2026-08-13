@@ -23,5 +23,6 @@ spring:
 app:
   jwt:
     secret: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-  gemini:
-    api-key: test-gemini-key
+  ai-service:
+    base-url: http://localhost:8000
+    api-key: test-ai-service-key

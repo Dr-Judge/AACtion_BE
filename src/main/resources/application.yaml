@@ -20,8 +20,9 @@ spring:
 app:
   jwt:
     secret: ${JWT_SECRET}
-  gemini:
-    api-key: ${GEMINI_API_KEY}
+  ai-service:
+    base-url: ${AI_SERVICE_BASE_URL}
+    api-key: ${AI_SERVICE_API_KEY}
 
 server:
   tomcat:
