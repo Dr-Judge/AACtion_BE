@@ -23,3 +23,6 @@ spring:
 app:
   jwt:
     secret: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  ai-service:
+    base-url: http://localhost:8000
+    api-key: test-ai-service-key
