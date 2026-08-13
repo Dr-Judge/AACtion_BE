@@ -94,6 +94,8 @@ POST /internal/api/v1/judgments
 | 재시도 후에도 실패 | Spring이 판정을 `FAILED`로 확정 처리 | 무한 재시도 없음 |
 | 4xx | 재시도 없음 | Python이 원천적으로 처리 못 하는 입력 → 재시도해도 결과 동일 |
 
+**알려진 한계 (의도적 스코프아웃)**: 타임아웃 후 재시도 시 `Idempotency-Key`가 없어, Python이 실제로는 응답만 유실됐을 뿐 판정을 이미 끝낸 경우 Gemini 호출이 중복될 수 있다. 이 API는 Python이 DB에 아무것도 쓰지 않는 stateless 구조(읽기+Gemini 호출만)라 데이터 정합성이 깨지진 않고, 최악의 경우도 Gemini 비용 중복 정도라 MVP 범위에서는 허용한다. 429도 별도 처리 없이 일반 4xx로 묶어 재시도하지 않는다(안전한 기본 동작). 요청량이 늘어나 중복 호출 비용이 유의미해지면 그때 Idempotency-Key 기반 중복 제거를 추가한다.
+
 ---
 
 ## 4. 에러 매핑 (Python 응답 → Spring 처리)
