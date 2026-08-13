@@ -82,6 +82,21 @@ POST /internal/api/v1/judgments
 
 `trust_level` 값은 Spring의 `TrustLevel` enum과 1:1로 맞춘다: `CLINICAL_EVIDENCE` / `EXPERT_OPINION` / `PENDING` / `COUNTER_EVIDENCE` / `NO_EVIDENCE`.
 
+### 응답 필드 null / 필수 규칙
+
+**원칙: 필드를 생략하지 않는다.** 값이 없으면 `null`(단일 값) 또는 `[]`(배열)로 채워서 항상 모든 키를 내려준다 — Spring 쪽에서 필드 존재 여부까지 분기하지 않아도 되게.
+
+| 필드 | 필수 | null 허용 | 규칙 |
+|---|---|---|---|
+| `trust_level` | ✅ | ❌ | 항상 5종 enum 중 하나 |
+| `evidence_summary` | ✅ | ❌ | 빈 문자열 금지 |
+| `conflict_of_interest.detected` | ✅ | ❌ | - |
+| `conflict_of_interest.type` | ✅(키 존재) | `detected: false`면 `null` | |
+| `conflict_of_interest.description` | ✅(키 존재) | `detected: false`면 `null` | |
+| `safety_notice` | ✅(키 존재) | `trust_level`이 `PENDING`/`NO_EVIDENCE`가 아니면 `null` | |
+| `sources` | ✅ | ❌ | 근거 없으면 `null`이 아니라 빈 배열 `[]` |
+| `guide_card` | ✅ | ❌ | 항상 존재 (내부 필드는 위와 동일하게 값 없으면 `null`) |
+
 ---
 
 ## 3. 타임아웃 & 재시도 정책
@@ -107,6 +122,10 @@ POST /internal/api/v1/judgments
 | 5xx / timeout (1회 재시도 후에도 실패) | 실패 | `errorCode: JUDGMENT_005` |
 
 `JUDGMENT_005`(AI 서비스 실패)는 HTTP 레벨 에러가 아니라, `GET /api/judgments/{id}` 응답이 `200 OK`인 채로 `data.status: "FAILED"` 안에 담겨 나간다. 기존 401/422/429 같은 `ApiResponse.error` 패턴과 혼동하지 않는다. 실패 시 해당 요청이 소모한 일일 판정 횟수는 환불한다 (원인 구분 없이 `FAILED`면 전부 환불).
+
+**로깅은 구분한다.** 사용자에게 보여주는 값(`JUDGMENT_005`)은 원인 불문 동일하지만, Spring 서버 로그는 원인별로 다르게 남긴다:
+- Python이 `401`(잘못된/누락된 `X-Internal-Api-Key`)을 반환하면 → **개별 요청 실패가 아니라 배포 설정 오류**다. `log.error`로 크게 남겨서 눈에 띄게 한다 — 방치하면 모든 판정 요청이 조용히 다 실패하면서 사용자만 계속 환불받는 상태가 될 수 있다.
+- 그 외 4xx/5xx/timeout은 개별 요청 단위 실패로 보고 `log.warn` 수준으로 남긴다.
 
 ---
 
