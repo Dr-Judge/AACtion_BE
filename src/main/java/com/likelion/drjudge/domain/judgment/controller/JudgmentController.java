@@ -4,15 +4,16 @@ import com.likelion.drjudge.domain.judgment.dto.request.CreateJudgmentRequest;
 import com.likelion.drjudge.domain.judgment.dto.response.CreateJudgmentResponse;
 import com.likelion.drjudge.domain.judgment.dto.response.JudgmentDetailResponse;
 import com.likelion.drjudge.domain.judgment.dto.response.JudgmentListResponse;
-import com.likelion.drjudge.domain.judgment.exception.JudgmentErrorCode;
 import com.likelion.drjudge.domain.judgment.service.JudgmentService;
-import com.likelion.drjudge.global.exception.BusinessException;
+import com.likelion.drjudge.domain.jwt.service.CustomUserPrincipal;
 import com.likelion.drjudge.global.response.ApiResponse;
-import jakarta.servlet.http.HttpServletRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "판정(Judgment)", description = "건강/영양 주장에 대한 AI 판정 요청·조회 API")
 @RestController
 @RequestMapping("/api/judgments")
 @RequiredArgsConstructor
@@ -28,47 +30,43 @@ public class JudgmentController {
 
     private final JudgmentService judgmentService;
 
+    @Operation(
+            summary = "판정 요청 생성",
+            description = "TEXT/IMAGE/LINK 중 하나로 판정을 요청한다. 즉시 202로 judgmentId를 반환하고, "
+                    + "실제 판정은 비동기로 처리된다 (IMAGE/LINK는 OCR/추출 연동 전이라 현재 422로 실패함, task #8).")
     @PostMapping
     public ResponseEntity<ApiResponse<CreateJudgmentResponse>> create(
             @Valid @RequestBody CreateJudgmentRequest request,
-            HttpServletRequest httpRequest) {
+            @AuthenticationPrincipal CustomUserPrincipal principal) {
 
-        Long userId = getCurrentUserId(httpRequest);
-        CreateJudgmentResponse response = judgmentService.create(userId, request);
+        CreateJudgmentResponse response = judgmentService.create(principal.getId(), request);
         judgmentService.processAsync(response.judgmentId());
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(response));
     }
 
+    @Operation(
+            summary = "판정 결과 조회 (폴링)",
+            description = "status에 따라 응답 필드가 달라진다 — PROCESSING/COMPLETED/FAILED.")
     @GetMapping("/{judgmentId}")
     public ResponseEntity<ApiResponse<JudgmentDetailResponse>> get(
             @PathVariable Long judgmentId,
-            HttpServletRequest httpRequest) {
+            @AuthenticationPrincipal CustomUserPrincipal principal) {
 
-        Long userId = getCurrentUserId(httpRequest);
-        return ResponseEntity.ok(ApiResponse.success(judgmentService.get(userId, judgmentId)));
+        return ResponseEntity.ok(ApiResponse.success(judgmentService.get(principal.getId(), judgmentId)));
     }
 
+    @Operation(
+            summary = "판정 목록 조회 (더보기)",
+            description = "totalCount 없이 hasNext만 반환하는 load-more 방식. 일일 요청 한도에 포함되지 않는다.")
     @GetMapping
     public ResponseEntity<ApiResponse<JudgmentListResponse>> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) Long categoryId,
-            HttpServletRequest httpRequest) {
+            @AuthenticationPrincipal CustomUserPrincipal principal) {
 
-        Long userId = getCurrentUserId(httpRequest);
-        return ResponseEntity.ok(ApiResponse.success(judgmentService.list(userId, categoryId, page, size)));
-    }
-
-    /**
-     * TODO(auth): 인증 PR 머지되면 실제 방식(예: @AuthenticationPrincipal)으로 교체.
-     * 지금은 SecurityConfig/JWT 필터가 없어서 임시로 헤더에서 직접 읽는다 — 교체 지점을 여기 하나로 격리해둠.
-     */
-    private Long getCurrentUserId(HttpServletRequest request) {
-        String userIdHeader = request.getHeader("X-Debug-User-Id");
-        if (userIdHeader == null) {
-            throw new BusinessException(JudgmentErrorCode.ANONYMOUS_JUDGMENT_NOT_ALLOWED);
-        }
-        return Long.parseLong(userIdHeader);
+        return ResponseEntity.ok(
+                ApiResponse.success(judgmentService.list(principal.getId(), categoryId, page, size)));
     }
 }

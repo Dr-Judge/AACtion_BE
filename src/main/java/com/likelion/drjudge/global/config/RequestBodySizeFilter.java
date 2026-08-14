@@ -47,8 +47,7 @@ public class RequestBodySizeFilter extends OncePerRequestFilter {
         response.setCharacterEncoding("UTF-8");
 
         ErrorResponse errorResponse = ErrorResponse.of(
-                HttpStatus.PAYLOAD_TOO_LARGE.value(),
-                CommonErrorCode.INVALID_INPUT_VALUE.getCode(),
+                CommonErrorCode.PAYLOAD_TOO_LARGE,
                 "요청 본문이 너무 큽니다 (최대 10MB).",
                 path);
 
