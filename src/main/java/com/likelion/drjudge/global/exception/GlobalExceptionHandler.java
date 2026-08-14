@@ -27,14 +27,12 @@ public class GlobalExceptionHandler {
             BusinessException exception, HttpServletRequest request) {
 
         ErrorCode errorCode = exception.getErrorCode();
-        String traceId = traceIdOf(request);
 
         log.warn("event=exception_handled reason={}, code={}, message={}, traceId={}, details={}",
-                errorCode, errorCode.getCode(), exception.getMessage(), traceId, exception.getContext());
+                errorCode, errorCode.getCode(), exception.getMessage(), traceIdOf(request), exception.getContext());
 
         ErrorResponse errorResponse = ErrorResponse.of(
-                errorCode.getHttpStatus().value(), errorCode.getCode(), errorCode.getMessage(),
-                request.getRequestURI());
+                errorCode, errorCode.getMessage(), request.getRequestURI());
 
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorResponse));
     }
@@ -53,8 +51,7 @@ public class GlobalExceptionHandler {
                 message, traceIdOf(request));
 
         ErrorResponse errorResponse = ErrorResponse.of(
-                CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
-                CommonErrorCode.INVALID_INPUT_VALUE.getCode(), message, request.getRequestURI());
+                CommonErrorCode.INVALID_INPUT_VALUE, message, request.getRequestURI());
 
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
                 .body(ApiResponse.error(errorResponse));
@@ -73,8 +70,7 @@ public class GlobalExceptionHandler {
                 exception.getMessage(), traceIdOf(request));
 
         ErrorResponse errorResponse = ErrorResponse.of(
-                CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
-                CommonErrorCode.INVALID_INPUT_VALUE.getCode(),
+                CommonErrorCode.INVALID_INPUT_VALUE,
                 CommonErrorCode.INVALID_INPUT_VALUE.getMessage(), request.getRequestURI());
 
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
@@ -91,8 +87,7 @@ public class GlobalExceptionHandler {
             log.error("event=return_value_validation_failed traceId={}", traceId, exception);
 
             ErrorResponse errorResponse = ErrorResponse.of(
-                    CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus().value(),
-                    CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                    CommonErrorCode.INTERNAL_SERVER_ERROR,
                     CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage(), request.getRequestURI());
 
             return ResponseEntity.status(CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
@@ -103,8 +98,7 @@ public class GlobalExceptionHandler {
                 CommonErrorCode.INVALID_INPUT_VALUE, CommonErrorCode.INVALID_INPUT_VALUE.getCode(), traceId);
 
         ErrorResponse errorResponse = ErrorResponse.of(
-                CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
-                CommonErrorCode.INVALID_INPUT_VALUE.getCode(),
+                CommonErrorCode.INVALID_INPUT_VALUE,
                 CommonErrorCode.INVALID_INPUT_VALUE.getMessage(), request.getRequestURI());
 
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
@@ -115,12 +109,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleException(
             Exception exception, HttpServletRequest request) {
 
-        String traceId = traceIdOf(request);
-        log.error("event=unhandled_exception traceId={}", traceId, exception);
+        log.error("event=unhandled_exception traceId={}", traceIdOf(request), exception);
 
         ErrorResponse errorResponse = ErrorResponse.of(
-                CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus().value(),
-                CommonErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                CommonErrorCode.INTERNAL_SERVER_ERROR,
                 CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage(), request.getRequestURI());
 
         return ResponseEntity.status(CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())

@@ -9,21 +9,15 @@ public record ErrorResponse(
         String errorCode,
         String message,
         String path,
-        String traceId,
         LocalDateTime timestamp
 ) {
 
-    public static ErrorResponse of(int status, String errorCode, String message, String path) {
-        return new ErrorResponse(status, errorCode, message, path, null, LocalDateTime.now());
-    }
-
-    public static ErrorResponse of(ErrorCode errorCode, String message, String path, String traceId) {
+    public static ErrorResponse of(ErrorCode errorCode, String message, String path) {
         return new ErrorResponse(
                 errorCode.getHttpStatus().value(),
                 errorCode.getCode(),
                 message,
                 path,
-                traceId,
                 LocalDateTime.now()
         );
     }

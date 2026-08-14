@@ -1,4 +1,3 @@
-// domain/user/dto/request/OnboardingRequest.java
 package com.likelion.drjudge.domain.user.dto.request;
 
 import com.likelion.drjudge.domain.user.entity.AgeGroup;
@@ -8,6 +7,9 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public record OnboardingRequest(
+
+        @NotNull(message = "userId가 필요합니다.")
+        Long userId,
 
         @NotEmpty(message = "관심 카테고리를 1개 이상 선택해주세요.")
         List<String> interestCategoryCodes,

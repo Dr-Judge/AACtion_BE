@@ -2,7 +2,6 @@ package com.likelion.drjudge.domain.jwt.jwt;
 
 import tools.jackson.databind.ObjectMapper;
 import com.likelion.drjudge.domain.auth.exception.AuthErrorCode;
-import com.likelion.drjudge.domain.jwt.filter.TraceIdFilter;
 import com.likelion.drjudge.global.exception.CommonErrorCode;
 import com.likelion.drjudge.global.exception.ErrorCode;
 import com.likelion.drjudge.global.response.ErrorResponse;
@@ -31,11 +30,7 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
                 : CommonErrorCode.UNAUTHORIZED;
 
         ErrorResponse errorResponse = ErrorResponse.of(
-                errorCode,
-                errorCode.getMessage(),
-                request.getRequestURI(),
-                (String) request.getAttribute(TraceIdFilter.TRACE_ID)
-        );
+                errorCode, errorCode.getMessage(), request.getRequestURI());
 
         response.setStatus(errorCode.getHttpStatus().value());
         response.setContentType("application/json;charset=UTF-8");
