@@ -4,6 +4,8 @@ import com.likelion.drjudge.domain.jwt.filter.TraceIdFilter;
 import com.likelion.drjudge.global.response.ApiResponse;
 import com.likelion.drjudge.global.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -52,6 +54,23 @@ public class GlobalExceptionHandler {
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 CommonErrorCode.INVALID_INPUT_VALUE, message, request.getRequestURI());
+
+        return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
+                .body(ApiResponse.error(errorResponse));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(
+            ConstraintViolationException exception, HttpServletRequest request) {
+
+        String message = exception.getConstraintViolations().stream()
+                .findFirst()
+                .map(ConstraintViolation::getMessage)
+                .orElse(CommonErrorCode.INVALID_INPUT_VALUE.getMessage());
+
+        ErrorResponse errorResponse = ErrorResponse.of(
+                CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
+                CommonErrorCode.INVALID_INPUT_VALUE.getCode(), message, request.getRequestURI());
 
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
                 .body(ApiResponse.error(errorResponse));

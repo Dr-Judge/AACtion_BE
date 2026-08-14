@@ -100,4 +100,8 @@ public class User {
     public boolean isOnboardingCompleted() {
         return ageGroup != null && gender != null && !interestCategories.isEmpty();
     }
+
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+    }
 }
