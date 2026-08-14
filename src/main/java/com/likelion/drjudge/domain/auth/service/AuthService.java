@@ -102,11 +102,16 @@ public class AuthService {
             throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
         }
 
-        if (!refreshTokenService.isValid(userId, refreshToken)) {
+        String newAccessToken = jwtTokenProvider.createAccessToken(userId);
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(userId);
+        Duration ttl = Duration.ofMillis(jwtTokenProvider.getRefreshTokenValidityMs());
+
+        boolean rotated = refreshTokenService.rotate(userId, refreshToken, newRefreshToken, ttl);
+        if (!rotated) {
             throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }
 
-        return issueTokens(userId);
+        return new TokenResponse(newAccessToken, newRefreshToken);
     }
 
     public void logout(Long userId, Claims accessClaims) {
