@@ -19,9 +19,11 @@ import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,7 +60,7 @@ public class AuthService {
                 request.loginId(), encodedPassword, request.email(), request.name(), request.nickname());
 
         try {
-            userRepository.save(user);
+            userRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
             String msg = e.getMostSpecificCause().getMessage();
             if (msg != null && msg.contains("uq_users_login_id")) {
@@ -82,7 +84,7 @@ public class AuthService {
             return issueTokens(principal.getId());
         } catch (DisabledException e) {
             throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
-        } catch (AuthenticationException e) {
+        } catch (BadCredentialsException | UsernameNotFoundException e) {
             throw new BusinessException(AuthErrorCode.INVALID_CREDENTIALS);
         }
     }

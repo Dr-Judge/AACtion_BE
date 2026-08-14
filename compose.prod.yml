@@ -14,7 +14,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       FLYWAY_OUT_OF_ORDER: "false"
       REDIS_HOST: redis
-      REDIS_PORT: 6380
+      REDIS_PORT: 6379
       AI_SERVICE_BASE_URL: ${AI_SERVICE_BASE_URL}
       AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY}
     depends_on:
@@ -42,6 +42,9 @@ services:
   redis:
     image: redis:7
     restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
