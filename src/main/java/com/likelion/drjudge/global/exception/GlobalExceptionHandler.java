@@ -68,9 +68,12 @@ public class GlobalExceptionHandler {
                 .map(ConstraintViolation::getMessage)
                 .orElse(CommonErrorCode.INVALID_INPUT_VALUE.getMessage());
 
+        log.warn("event=exception_handled reason={}, code={}, message={}, traceId={}",
+                CommonErrorCode.INVALID_INPUT_VALUE, CommonErrorCode.INVALID_INPUT_VALUE.getCode(),
+                message, traceIdOf(request));
+
         ErrorResponse errorResponse = ErrorResponse.of(
-                CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus().value(),
-                CommonErrorCode.INVALID_INPUT_VALUE.getCode(), message, request.getRequestURI());
+                CommonErrorCode.INVALID_INPUT_VALUE, message, request.getRequestURI());
 
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
                 .body(ApiResponse.error(errorResponse));
