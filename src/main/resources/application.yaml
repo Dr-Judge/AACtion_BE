@@ -16,10 +16,17 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: false
     out-of-order: ${FLYWAY_OUT_OF_ORDER:true}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:1800000}
+  refresh-token-validity: ${JWT_REFRESH_TOKEN_VALIDITY:1209600000}
 
 app:
-  jwt:
-    secret: ${JWT_SECRET}
   ai-service:
     base-url: ${AI_SERVICE_BASE_URL}
     api-key: ${AI_SERVICE_API_KEY}
