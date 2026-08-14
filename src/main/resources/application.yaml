@@ -23,6 +23,8 @@ app:
   ai-service:
     base-url: ${AI_SERVICE_BASE_URL}
     api-key: ${AI_SERVICE_API_KEY}
+  judgment:
+    daily-limit: ${JUDGMENT_DAILY_LIMIT:5}
 
 server:
   tomcat:
