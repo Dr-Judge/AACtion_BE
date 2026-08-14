@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,18 +30,21 @@ import com.likelion.drjudge.global.constant.TrustLevel;
 import com.likelion.drjudge.global.exception.BusinessException;
 import com.likelion.drjudge.global.exception.CommonErrorCode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
@@ -81,6 +87,10 @@ class JudgmentServiceTest {
         CreateJudgmentResponse response = judgmentService.create(1L, request);
 
         assertEquals(JudgmentStatus.PROCESSING, response.status());
+
+        ArgumentCaptor<JudgmentRequestCount> captor = ArgumentCaptor.forClass(JudgmentRequestCount.class);
+        verify(requestCountRepository).save(captor.capture());
+        assertEquals(1, captor.getValue().getRequestCount());
     }
 
     @Test
@@ -104,33 +114,64 @@ class JudgmentServiceTest {
     }
 
     @Test
-    void AI_서비스가_PENDING을_반환하면_판단보류로_완료된다() throws Exception {
+    void IMAGE_입력은_추출_실패로_거부되고_Judgment가_저장되지_않는다() {
+        User user = mock(User.class);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
+                .thenReturn(Optional.empty());
+
+        CreateJudgmentRequest request = new CreateJudgmentRequest(InputType.IMAGE, null, "base64data", null, null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> judgmentService.create(1L, request));
+
+        assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
+        verify(judgmentRepository, never()).save(any());
+    }
+
+    @Test
+    void LINK_입력은_추출_실패로_거부되고_Judgment가_저장되지_않는다() {
+        User user = mock(User.class);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
+                .thenReturn(Optional.empty());
+
+        CreateJudgmentRequest request =
+                new CreateJudgmentRequest(InputType.LINK, null, null, "https://youtube.com/watch?v=x", null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> judgmentService.create(1L, request));
+
+        assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
+        verify(judgmentRepository, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(TrustLevel.class)
+    void AI_서비스가_성공하면_반환된_trustLevel_그대로_COMPLETED로_완료된다(TrustLevel trustLevel) throws Exception {
         Judgment judgment = Judgment.create(mock(User.class), InputType.TEXT, "테스트 주장", null);
         when(judgmentRepository.findById(10L)).thenReturn(Optional.of(judgment));
-        stubAiServiceSuccess(aiResponse("PENDING"));
+        stubAiServiceSuccess(aiResponse(trustLevel.name()));
         when(objectMapper.writeValueAsString(any())).thenReturn("[]");
 
         judgmentService.processAsync(10L);
 
         assertEquals(JudgmentStatus.COMPLETED, judgment.getStatus());
-        assertEquals(TrustLevel.PENDING, judgment.getTrustLevel());
-    }
-
-    @Test
-    void AI_서비스가_COUNTER_EVIDENCE를_반환하면_반박근거있음으로_완료된다() throws Exception {
-        Judgment judgment = Judgment.create(mock(User.class), InputType.TEXT, "테스트 주장", null);
-        when(judgmentRepository.findById(11L)).thenReturn(Optional.of(judgment));
-        stubAiServiceSuccess(aiResponse("COUNTER_EVIDENCE"));
-        when(objectMapper.writeValueAsString(any())).thenReturn("[]");
-
-        judgmentService.processAsync(11L);
-
-        assertEquals(JudgmentStatus.COMPLETED, judgment.getStatus());
-        assertEquals(TrustLevel.COUNTER_EVIDENCE, judgment.getTrustLevel());
+        assertEquals(trustLevel, judgment.getTrustLevel());
     }
 
     @Test
     void AI_서비스가_5xx를_반환하면_1회_재시도하고_그래도_실패하면_FAILED_및_한도환불() {
+        assertRetriesOnceThenFails(HttpServerErrorException.create(
+                HttpStatusCode.valueOf(503), "Service Unavailable", null, null, null));
+    }
+
+    @Test
+    void AI_서비스가_타임아웃나면_1회_재시도하고_그래도_실패하면_FAILED_및_한도환불() {
+        assertRetriesOnceThenFails(new ResourceAccessException("Read timed out"));
+    }
+
+    private void assertRetriesOnceThenFails(RuntimeException aiServiceFailure) {
         User user = mock(User.class);
         when(user.getId()).thenReturn(1L);
 
@@ -146,9 +187,7 @@ class JudgmentServiceTest {
         when(uriSpec.uri(anyString())).thenReturn(bodySpec);
         when(bodySpec.body(any(AiJudgmentRequest.class))).thenReturn(bodySpec);
         when(bodySpec.retrieve()).thenReturn(responseSpec);
-        when(responseSpec.body(AiJudgmentResponse.class))
-                .thenThrow(HttpServerErrorException.create(
-                        HttpStatusCode.valueOf(503), "Service Unavailable", null, null, null));
+        when(responseSpec.body(AiJudgmentResponse.class)).thenThrow(aiServiceFailure);
 
         JudgmentRequestCount countRow = JudgmentRequestCount.create(1L, today);
         countRow.increment();
@@ -159,8 +198,8 @@ class JudgmentServiceTest {
         assertEquals(JudgmentStatus.FAILED, judgment.getStatus());
         assertEquals(JudgmentErrorCode.AI_SERVICE_UNAVAILABLE.getCode(), judgment.getFailureErrorCode());
         assertEquals(0, countRow.getRequestCount());
-        // 5xx는 1회만 재시도하므로 총 2번 호출된다.
-        org.mockito.Mockito.verify(responseSpec, org.mockito.Mockito.times(2)).body(AiJudgmentResponse.class);
+        // 5xx/timeout은 1회만 재시도하므로 총 2번 호출된다.
+        verify(responseSpec, times(2)).body(AiJudgmentResponse.class);
     }
 
     private void stubAiServiceSuccess(AiJudgmentResponse response) {
