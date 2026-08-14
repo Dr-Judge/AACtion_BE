@@ -19,11 +19,27 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "kakao_id", nullable = false, unique = true, length = 50)
+    @Column(name = "kakao_id", unique = true, length = 50)
     private String kakaoId;
+
+    @Column(name = "login_id", unique = true, length = 50)
+    private String loginId;
+
+    @Column(length = 255)
+    private String password;
+
+    @Column(unique = true, length = 100)
+    private String email;
+
+    @Column(length = 50)
+    private String name;
 
     @Column(nullable = false, length = 50)
     private String nickname;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserStatus status = UserStatus.ACTIVE;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "age_group", length = 20)
@@ -50,6 +66,17 @@ public class User {
     @Column(name = "updated_at", insertable = false, updatable = false)
     private LocalDateTime updatedAt;
 
+    public static User createLocalUser(String loginId, String password, String email, String name, String nickname) {
+        User user = new User();
+        user.loginId = loginId;
+        user.password = password;
+        user.email = email;
+        user.name = name;
+        user.nickname = nickname;
+        user.status = UserStatus.ACTIVE;
+        return user;
+    }
+
     public void completeOnboarding(Set<Category> categories, AgeGroup ageGroup, Gender gender) {
         this.interestCategories.clear();
         this.interestCategories.addAll(categories);
@@ -72,5 +99,9 @@ public class User {
 
     public boolean isOnboardingCompleted() {
         return ageGroup != null && gender != null && !interestCategories.isEmpty();
+    }
+
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
     }
 }
