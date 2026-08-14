@@ -73,6 +73,20 @@ public class AuthService {
         return new SignupResponse(user.getId());
     }
 
+    public TokenResponse login(LoginRequest request) {
+        try {
+            var authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.loginId(), request.password())
+            );
+            CustomUserPrincipal principal = (CustomUserPrincipal) authentication.getPrincipal();
+            return issueTokens(principal.getId());
+        } catch (DisabledException e) {
+            throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
+        } catch (AuthenticationException e) {
+            throw new BusinessException(AuthErrorCode.INVALID_CREDENTIALS);
+        }
+    }
+
     public TokenResponse reissue(String refreshToken) {
         Claims claims = jwtTokenProvider.resolveRefreshClaims(refreshToken);
         if (claims == null) {
