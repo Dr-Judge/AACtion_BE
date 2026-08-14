@@ -20,7 +20,10 @@ public class FeedService {
 
     /** GET /feed/posts/me */
     public FeedPostPageResponse getMyFeedPosts(Long userId, int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page - 1, size + 1, Sort.by("createdAt").descending());
+        PageRequest pageRequest = PageRequest.of(
+                page - 1, size + 1,
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))
+        );
 
         List<FeedPost> rows = feedPostRepository.findByUserIdOrderByCreatedAtDesc(userId, pageRequest);
 

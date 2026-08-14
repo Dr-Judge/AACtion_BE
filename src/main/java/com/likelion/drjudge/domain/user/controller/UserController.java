@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,26 +25,26 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<UserResponse>> getMyPage(Authentication authentication) {
-        Long userId = currentUserId(authentication);
+    public ResponseEntity<ApiResponse<UserResponse>> getMyPage() {
+        Long userId = currentUserId();
         UserResponse response = userService.getMyPage(userId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PatchMapping("/nickname")
     public ResponseEntity<ApiResponse<UserResponse>> updateNickname(
-            Authentication authentication,
             @Valid @RequestBody NicknameUpdateRequest request
     ) {
-        Long userId = currentUserId(authentication);
+        Long userId = currentUserId();
         UserResponse response = userService.updateNickname(userId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     // TODO: B1의 인증(JWT) 구현이 머지되면 실제 Principal 타입으로 교체 — OnboardingController와 동일한 임시 처리.
-    private Long currentUserId(Authentication authentication) {
-        if (authentication == null || "anonymousUser".equals(authentication.getName())) {
-            return 1L; // 로컬 테스트 전용
+    private Long currentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
         }
         try {
             return Long.valueOf(authentication.getName());
