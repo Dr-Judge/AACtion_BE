@@ -119,9 +119,9 @@ public class JudgmentService {
         Pageable pageable = PageRequest.of(Math.max(page - 1, 0), safeSize);
 
         Slice<Judgment> slice = categoryId != null
-                ? judgmentRepository.findAllByUserAndCategoryOrderByCreatedAtDesc(
+                ? judgmentRepository.findAllByUserAndCategoryOrderByCreatedAtDescIdDesc(
                         user, categoryRepository.getReferenceById(categoryId), pageable)
-                : judgmentRepository.findAllByUserOrderByCreatedAtDesc(user, pageable);
+                : judgmentRepository.findAllByUserOrderByCreatedAtDescIdDesc(user, pageable);
 
         List<JudgmentSummaryResponse> items = slice.getContent().stream()
                 .map(this::toSummaryResponse)
