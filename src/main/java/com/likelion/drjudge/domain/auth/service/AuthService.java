@@ -10,18 +10,23 @@ import com.likelion.drjudge.domain.jwt.service.CustomUserPrincipal;
 import com.likelion.drjudge.domain.jwt.service.RefreshTokenService;
 import com.likelion.drjudge.domain.jwt.service.TokenBlacklistService;
 import com.likelion.drjudge.domain.user.entity.User;
+import com.likelion.drjudge.domain.user.entity.UserStatus;
 import com.likelion.drjudge.domain.user.exception.UserErrorCode;
 import com.likelion.drjudge.domain.user.repository.UserRepository;
 import com.likelion.drjudge.global.exception.BusinessException;
+import com.likelion.drjudge.global.exception.CommonErrorCode;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 @Service
@@ -40,31 +45,32 @@ public class AuthService {
         if (userRepository.findByLoginId(request.loginId()).isPresent()) {
             throw new BusinessException(UserErrorCode.LOGIN_ID_ALREADY_EXISTS);
         }
-
         if (userRepository.findByEmail(request.email()).isPresent()) {
             throw new BusinessException(UserErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
-        String encodedPassword = passwordEncoder.encode(request.password());
+        if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE);
+        }
 
+        String encodedPassword = passwordEncoder.encode(request.password());
         User user = User.createLocalUser(
                 request.loginId(), encodedPassword, request.email(), request.name(), request.nickname());
 
-        userRepository.save(user);
+        try {
+            userRepository.save(user);
+        } catch (DataIntegrityViolationException e) {
+            String msg = e.getMostSpecificCause().getMessage();
+            if (msg != null && msg.contains("uq_users_login_id")) {
+                throw new BusinessException(UserErrorCode.LOGIN_ID_ALREADY_EXISTS);
+            }
+            if (msg != null && msg.contains("uq_users_email")) {
+                throw new BusinessException(UserErrorCode.EMAIL_ALREADY_EXISTS);
+            }
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE);
+        }
 
         return new SignupResponse(user.getId());
-    }
-
-    public TokenResponse login(LoginRequest request) {
-        try {
-            var authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.loginId(), request.password())
-            );
-            CustomUserPrincipal principal = (CustomUserPrincipal) authentication.getPrincipal();
-            return issueTokens(principal.getId());
-        } catch (AuthenticationException e) {
-            throw new BusinessException(AuthErrorCode.INVALID_CREDENTIALS);
-        }
     }
 
     public TokenResponse reissue(String refreshToken) {
@@ -74,6 +80,13 @@ public class AuthService {
         }
 
         Long userId = jwtTokenProvider.extractUserId(claims);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
+        }
+
         if (!refreshTokenService.isValid(userId, refreshToken)) {
             throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }

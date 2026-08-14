@@ -49,8 +49,8 @@ public class JwtTokenProvider {
 
     public String createRefreshToken(Long userId) {
         Date now = new Date();
-        Date midnight = getTodayMidnight();
-        return createToken(userId, now, midnight, REFRESH_TOKEN_TYPE);
+        Date expiration = new Date(now.getTime() + refreshTokenValidityMs);
+        return createToken(userId, now, expiration, REFRESH_TOKEN_TYPE);
     }
 
     private String createToken(Long userId, Date issuedAt, Date expiration, String tokenType) {

@@ -47,7 +47,7 @@ public class SecurityConfig {
                 "Authorization", "Content-Type", "Accept", "X-Requested-With", "Cache-Control", "Idempotency-Key","X-Refresh-Token","Origin",
                 "Access-Control-Request-Method", "Access-Control-Request-Headers", "Refresh-Token"
         ));
-        configuration.setExposedHeaders(List.of("Authorization","New-Access-Token", "Content-Disposition"));
+        configuration.setExposedHeaders(List.of("Authorization", "New-Access-Token", "Content-Disposition", "X-Trace-Id"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -83,7 +83,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/users/me/onboarding").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/users/me/onboarding").permitAll()
                         .requestMatchers("/api/auth/logout").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()

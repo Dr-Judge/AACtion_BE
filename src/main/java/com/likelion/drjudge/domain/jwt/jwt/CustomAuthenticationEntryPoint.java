@@ -1,5 +1,6 @@
 package com.likelion.drjudge.domain.jwt.jwt;
 
+import com.likelion.drjudge.global.response.ApiResponse;
 import tools.jackson.databind.ObjectMapper;
 import com.likelion.drjudge.domain.auth.exception.AuthErrorCode;
 import com.likelion.drjudge.global.exception.CommonErrorCode;
@@ -34,6 +35,6 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
 
         response.setStatus(errorCode.getHttpStatus().value());
         response.setContentType("application/json;charset=UTF-8");
-        objectMapper.writeValue(response.getWriter(), errorResponse);
+        objectMapper.writeValue(response.getWriter(), ApiResponse.error(errorResponse));
     }
 }

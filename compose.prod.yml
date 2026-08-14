@@ -14,7 +14,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       FLYWAY_OUT_OF_ORDER: "false"
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: 6380
       AI_SERVICE_BASE_URL: ${AI_SERVICE_BASE_URL}
       AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY}
     depends_on:
@@ -50,3 +50,4 @@ services:
 
 volumes:
   mysql_data:
+  redis_data:
