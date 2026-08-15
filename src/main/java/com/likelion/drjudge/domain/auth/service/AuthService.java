@@ -28,6 +28,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -37,6 +39,9 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
+    private static final int TOKEN_INVALIDATION_MAX_ATTEMPTS = 3;
+    private static final long TOKEN_INVALIDATION_RETRY_BACKOFF_MS = 100L;
 
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
@@ -110,21 +115,22 @@ public class AuthService {
         String newRefreshToken = jwtTokenProvider.createRefreshToken(userId);
         Duration ttl = Duration.ofMillis(jwtTokenProvider.getRefreshTokenValidityMs());
 
-        boolean rotated = refreshTokenService.rotate(userId, refreshToken, newRefreshToken, ttl);
+        String oldAccessJti = null;
+        long oldAccessRemainingMs = 0;
+        if (oldAccessToken != null) {
+            Claims oldAccessClaims = jwtTokenProvider.resolveAccessClaimsAllowExpired(oldAccessToken);
+            if (oldAccessClaims != null && userId.equals(jwtTokenProvider.extractUserId(oldAccessClaims))) {
+                oldAccessJti = jwtTokenProvider.extractJti(oldAccessClaims);
+                oldAccessRemainingMs = jwtTokenProvider.getRemainingValidityMs(oldAccessClaims);
+            }
+        }
+
+        boolean rotated = refreshTokenService.rotateAndBlacklist(
+                userId, refreshToken, newRefreshToken, ttl, oldAccessJti, oldAccessRemainingMs);
         if (!rotated) {
             refreshTokenService.delete(userId);
             log.warn("event=refresh_token_reuse_suspected userId={}", userId);
             throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
-        }
-
-        if (oldAccessToken != null) {
-            Claims oldAccessClaims = jwtTokenProvider.resolveAccessClaimsAllowExpired(oldAccessToken);
-            if (oldAccessClaims != null
-                    && userId.equals(jwtTokenProvider.extractUserId(oldAccessClaims))) {
-                String jti = jwtTokenProvider.extractJti(oldAccessClaims);
-                long remainingMs = jwtTokenProvider.getRemainingValidityMs(oldAccessClaims);
-                tokenBlacklistService.blacklist(jti, remainingMs);
-            }
         }
 
         return new TokenResponse(newAccessToken, newRefreshToken);
@@ -149,10 +155,51 @@ public class AuthService {
 
         String jti = jwtTokenProvider.extractJti(accessClaims);
         long remainingMs = jwtTokenProvider.getRemainingValidityMs(accessClaims);
-        tokenBlacklistService.blacklistWithdrawn(jti, remainingMs);
-        refreshTokenService.delete(userId);
+        LocalDateTime withdrawnAt = LocalDateTime.now();
 
-        return new WithdrawResponse(LocalDateTime.now());
+        registerPostCommitTokenInvalidation(userId, jti, remainingMs);
+
+        return new WithdrawResponse(withdrawnAt);
+    }
+
+    private void registerPostCommitTokenInvalidation(Long userId, String jti, long remainingMs) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            invalidateTokensWithRetry(userId, jti, remainingMs);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                invalidateTokensWithRetry(userId, jti, remainingMs);
+            }
+        });
+    }
+
+    private void invalidateTokensWithRetry(Long userId, String jti, long remainingMs) {
+        for (int attempt = 1; attempt <= TOKEN_INVALIDATION_MAX_ATTEMPTS; attempt++) {
+            try {
+                tokenBlacklistService.blacklistWithdrawn(jti, remainingMs);
+                refreshTokenService.delete(userId);
+                return;
+            } catch (Exception e) {
+                if (attempt == TOKEN_INVALIDATION_MAX_ATTEMPTS) {
+                    log.error("event=withdraw_token_invalidation_failed userId={} jti={} "
+                            + "reason=MANUAL_REDIS_CLEANUP_REQUIRED", userId, jti, e);
+                } else {
+                    log.warn("event=withdraw_token_invalidation_retry attempt={} userId={} error={}",
+                            attempt, userId, e.getMessage());
+                    sleepBeforeRetry(attempt);
+                }
+            }
+        }
+    }
+
+    private void sleepBeforeRetry(int attempt) {
+        try {
+            Thread.sleep(TOKEN_INVALIDATION_RETRY_BACKOFF_MS * attempt);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private TokenResponse issueTokens(Long userId) {

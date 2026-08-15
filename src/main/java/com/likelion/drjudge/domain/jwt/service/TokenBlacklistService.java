@@ -10,8 +10,8 @@ import java.time.Duration;
 @Service
 @RequiredArgsConstructor
 public class TokenBlacklistService {
-    private static final String KEY_PREFIX = "blacklist:";
-    private static final String REASON_LOGOUT = "logout";
+    static final String KEY_PREFIX = "blacklist:";
+    static final String REASON_LOGOUT = "logout";
     private static final String REASON_WITHDRAWN = "withdrawn";
 
     private final RedisTemplate<String, String> redisTemplate;
@@ -26,7 +26,7 @@ public class TokenBlacklistService {
 
     private void put(String jti, long remainingValidityMs, String reason) {
         if (jti == null || remainingValidityMs <= 0) {
-            return; // 이미 만료된 토큰이면 블랙리스트에 올릴 필요 없음
+            return;
         }
         redisTemplate.opsForValue().set(KEY_PREFIX + jti, reason, Duration.ofMillis(remainingValidityMs));
     }
