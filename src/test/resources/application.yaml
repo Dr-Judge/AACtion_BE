@@ -26,7 +26,7 @@ spring:
 
 jwt:
   secret: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-  access-token-validity: 36000000 # 10시간
+  access-token-validity: 10800000 # 3시간
   refresh-token-validity: 1209600000 # 14일
 
 app:

@@ -112,14 +112,15 @@ public class AuthService {
 
         boolean rotated = refreshTokenService.rotate(userId, refreshToken, newRefreshToken, ttl);
         if (!rotated) {
-           refreshTokenService.delete(userId);
+            refreshTokenService.delete(userId);
             log.warn("event=refresh_token_reuse_suspected userId={}", userId);
             throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         if (oldAccessToken != null) {
             Claims oldAccessClaims = jwtTokenProvider.resolveAccessClaimsAllowExpired(oldAccessToken);
-            if (oldAccessClaims != null) {
+            if (oldAccessClaims != null
+                    && userId.equals(jwtTokenProvider.extractUserId(oldAccessClaims))) {
                 String jti = jwtTokenProvider.extractJti(oldAccessClaims);
                 long remainingMs = jwtTokenProvider.getRemainingValidityMs(oldAccessClaims);
                 tokenBlacklistService.blacklist(jti, remainingMs);
