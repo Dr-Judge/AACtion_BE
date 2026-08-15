@@ -4,6 +4,7 @@ import com.likelion.drjudge.domain.auth.dto.request.LoginRequest;
 import com.likelion.drjudge.domain.auth.dto.request.SignupRequest;
 import com.likelion.drjudge.domain.auth.dto.response.SignupResponse;
 import com.likelion.drjudge.domain.auth.dto.response.TokenResponse;
+import com.likelion.drjudge.domain.auth.dto.response.WithdrawResponse;
 import com.likelion.drjudge.domain.auth.exception.AuthErrorCode;
 import com.likelion.drjudge.domain.jwt.jwt.JwtTokenProvider;
 import com.likelion.drjudge.domain.jwt.service.CustomUserPrincipal;
@@ -17,6 +18,7 @@ import com.likelion.drjudge.global.exception.BusinessException;
 import com.likelion.drjudge.global.exception.CommonErrorCode;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -29,7 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -88,13 +92,13 @@ public class AuthService {
         }
     }
 
-    public TokenResponse reissue(String refreshToken) {
-        Claims claims = jwtTokenProvider.resolveRefreshClaims(refreshToken);
-        if (claims == null) {
+    public TokenResponse reissue(String refreshToken, String oldAccessToken) {
+        Claims refreshClaims = jwtTokenProvider.resolveRefreshClaims(refreshToken);
+        if (refreshClaims == null) {
             throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }
 
-        Long userId = jwtTokenProvider.extractUserId(claims);
+        Long userId = jwtTokenProvider.extractUserId(refreshClaims);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
@@ -108,7 +112,18 @@ public class AuthService {
 
         boolean rotated = refreshTokenService.rotate(userId, refreshToken, newRefreshToken, ttl);
         if (!rotated) {
+           refreshTokenService.delete(userId);
+            log.warn("event=refresh_token_reuse_suspected userId={}", userId);
             throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
+        }
+
+        if (oldAccessToken != null) {
+            Claims oldAccessClaims = jwtTokenProvider.resolveAccessClaimsAllowExpired(oldAccessToken);
+            if (oldAccessClaims != null) {
+                String jti = jwtTokenProvider.extractJti(oldAccessClaims);
+                long remainingMs = jwtTokenProvider.getRemainingValidityMs(oldAccessClaims);
+                tokenBlacklistService.blacklist(jti, remainingMs);
+            }
         }
 
         return new TokenResponse(newAccessToken, newRefreshToken);
@@ -119,6 +134,24 @@ public class AuthService {
         long remainingMs = jwtTokenProvider.getRemainingValidityMs(accessClaims);
         tokenBlacklistService.blacklist(jti, remainingMs);
         refreshTokenService.delete(userId);
+    }
+
+    @Transactional
+    public WithdrawResponse withdraw(Long userId, Claims accessClaims) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        if (user.getStatus() == UserStatus.WITHDRAWN) {
+            throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
+        }
+
+        user.withdraw();
+
+        String jti = jwtTokenProvider.extractJti(accessClaims);
+        long remainingMs = jwtTokenProvider.getRemainingValidityMs(accessClaims);
+        tokenBlacklistService.blacklistWithdrawn(jti, remainingMs);
+        refreshTokenService.delete(userId);
+
+        return new WithdrawResponse(LocalDateTime.now());
     }
 
     private TokenResponse issueTokens(Long userId) {

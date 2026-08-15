@@ -2,6 +2,7 @@ package com.likelion.drjudge.domain.jwt.jwt;
 
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -73,6 +74,24 @@ public class JwtTokenProvider {
     public Claims resolveAccessClaims(String token) {
         try {
             Claims claims = parseClaims(token);
+            if (!ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_KEY, String.class))) {
+                return null;
+            }
+            return claims;
+        } catch (JwtException | IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    public Claims resolveAccessClaimsAllowExpired(String token) {
+        try {
+            Claims claims = parseClaims(token);
+            if (!ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_KEY, String.class))) {
+                return null;
+            }
+            return claims;
+        } catch (ExpiredJwtException e) {
+            Claims claims = e.getClaims();
             if (!ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_KEY, String.class))) {
                 return null;
             }

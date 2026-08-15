@@ -11,17 +11,24 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class TokenBlacklistService {
     private static final String KEY_PREFIX = "blacklist:";
+    private static final String REASON_LOGOUT = "logout";
+    private static final String REASON_WITHDRAWN = "withdrawn";
 
     private final RedisTemplate<String, String> redisTemplate;
-    /**
-     * 로그아웃된 access token을 남은 만료시간만큼만 블랙리스트로
-     * TTL을 남은 만료시간으로 맞춰서 토큰이 만료되는 시점에 Redis에서도 자동으로 같이 사라지게
-     */
+
     public void blacklist(String jti, long remainingValidityMs) {
+        put(jti, remainingValidityMs, REASON_LOGOUT);
+    }
+
+    public void blacklistWithdrawn(String jti, long remainingValidityMs) {
+        put(jti, remainingValidityMs, REASON_WITHDRAWN);
+    }
+
+    private void put(String jti, long remainingValidityMs, String reason) {
         if (jti == null || remainingValidityMs <= 0) {
             return; // 이미 만료된 토큰이면 블랙리스트에 올릴 필요 없음
         }
-        redisTemplate.opsForValue().set(KEY_PREFIX + jti, "logout", Duration.ofMillis(remainingValidityMs));
+        redisTemplate.opsForValue().set(KEY_PREFIX + jti, reason, Duration.ofMillis(remainingValidityMs));
     }
 
     public boolean isBlacklisted(String jti) {
@@ -29,5 +36,12 @@ public class TokenBlacklistService {
             return false;
         }
         return Boolean.TRUE.equals(redisTemplate.hasKey(KEY_PREFIX + jti));
+    }
+
+    public boolean isWithdrawn(String jti) {
+        if (jti == null) {
+            return false;
+        }
+        return REASON_WITHDRAWN.equals(redisTemplate.opsForValue().get(KEY_PREFIX + jti));
     }
 }

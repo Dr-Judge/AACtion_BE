@@ -4,6 +4,7 @@ import com.likelion.drjudge.domain.auth.dto.request.LoginRequest;
 import com.likelion.drjudge.domain.auth.dto.request.SignupRequest;
 import com.likelion.drjudge.domain.auth.dto.response.SignupResponse;
 import com.likelion.drjudge.domain.auth.dto.response.TokenResponse;
+import com.likelion.drjudge.domain.auth.dto.response.WithdrawResponse;
 import com.likelion.drjudge.domain.auth.exception.AuthErrorCode;
 import com.likelion.drjudge.domain.auth.service.AuthService;
 import com.likelion.drjudge.domain.jwt.jwt.JwtTokenProvider;
@@ -39,10 +40,17 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(tokens));
     }
 
-    @PostMapping("/reissue")
+    @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<TokenResponse>> reissue(
-            @RequestHeader("X-Refresh-Token") String refreshToken) {
-        TokenResponse tokens = authService.reissue(refreshToken);
+            @RequestHeader("X-Refresh-Token") String refreshToken,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+
+        String oldAccessToken = null;
+        if (authorizationHeader != null) {
+            oldAccessToken = authorizationHeader.replaceFirst("^Bearer ", "");
+        }
+
+        TokenResponse tokens = authService.reissue(refreshToken, oldAccessToken);
         return ResponseEntity.ok(ApiResponse.success(tokens));
     }
 
@@ -59,5 +67,20 @@ public class AuthController {
 
         authService.logout(principal.getId(), claims);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @DeleteMapping("/me")
+    public ResponseEntity<ApiResponse<WithdrawResponse>> withdraw(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @RequestHeader("Authorization") String authorizationHeader) {
+
+        String accessToken = authorizationHeader.replaceFirst("^Bearer ", "");
+        Claims claims = jwtTokenProvider.resolveAccessClaims(accessToken);
+        if (claims == null) {
+            throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
+        }
+
+        WithdrawResponse response = authService.withdraw(principal.getId(), claims);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
