@@ -1,21 +1,21 @@
 package com.likelion.drjudge.domain.feed.controller;
 
-import com.likelion.drjudge.domain.auth.exception.AuthErrorCode;
+import com.likelion.drjudge.domain.feed.dto.request.FeedPostCreateRequest;
+import com.likelion.drjudge.domain.feed.dto.response.FeedPostResponse;
+import com.likelion.drjudge.domain.jwt.service.CustomUserPrincipal;
 import com.likelion.drjudge.domain.feed.dto.response.FeedPostPageResponse;
 import com.likelion.drjudge.domain.feed.service.FeedService;
-import com.likelion.drjudge.global.exception.BusinessException;
 import com.likelion.drjudge.global.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/feed/posts")
@@ -25,28 +25,54 @@ public class FeedController {
 
     private final FeedService feedService;
 
+    @Operation(summary = "내가 올린 공유 카드 목록 조회", description = "로그인한 사용자가 공유 피드에 게시한 판정 카드 목록을 최신순으로 조회한다. page/size 기반 더보기 페이지네이션(hasNext)을 사용한다.")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<FeedPostPageResponse>> getMyFeedPosts(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        Long userId = currentUserId();
-        FeedPostPageResponse response = feedService.getMyFeedPosts(userId, page, size);
+        FeedPostPageResponse response = feedService.getMyFeedPosts(principal.getId(), page, size);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    // TODO: B1의 인증(JWT) 구현이 머지되면 실제 Principal 타입으로 교체.
-    // Authentication을 메서드 파라미터로 받으면 Spring Security가 익명 요청의 principal을
-    // null로 masking해버려서, SecurityContextHolder에서 직접 꺼내는 방식으로 우회한다.
-    private Long currentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
-            throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
-        }
-        try {
-            return Long.valueOf(authentication.getName());
-        } catch (NumberFormatException e) {
-            throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
-        }
+    @Operation(summary = "공유 피드에 게시", description = "완료된 판정 결과를 공유 피드에 게시한다. 본인 소유이면서 상태가 COMPLETED인 판정만 게시 가능하다.")
+    @PostMapping
+    public ResponseEntity<ApiResponse<FeedPostResponse>> createFeedPost(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @RequestBody FeedPostCreateRequest request
+    ) {
+        FeedPostResponse response = feedService.createFeedPost(principal.getId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "공유 피드 게시물 삭제", description = "본인이 게시한 공유 카드를 삭제한다.")
+    @DeleteMapping("/{postId}")
+    public ResponseEntity<ApiResponse<Void>> deleteFeedPost(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long postId
+    ) {
+        feedService.deleteFeedPost(principal.getId(), postId);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "공유 피드 좋아요", description = "게시물에 좋아요를 누른다. 이미 눌렀으면 409(FEED_002)를 반환한다.")
+    @PostMapping("/{postId}/like")
+    public ResponseEntity<ApiResponse<Void>> likeFeedPost(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long postId
+    ) {
+        feedService.likeFeedPost(principal.getId(), postId);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "공유 피드 좋아요 취소", description = "눌렀던 좋아요를 취소한다. 누른 적 없으면 400(FEED_007)을 반환한다.")
+    @DeleteMapping("/{postId}/like")
+    public ResponseEntity<ApiResponse<Void>> unlikeFeedPost(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long postId
+    ) {
+        feedService.unlikeFeedPost(principal.getId(), postId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

@@ -12,7 +12,7 @@ public record FeedPostResponse(
     public static FeedPostResponse from(FeedPost feedPost) {
         return new FeedPostResponse(
                 feedPost.getId(),
-                feedPost.getJudgmentId(),
+                feedPost.getJudgment().getId(),
                 feedPost.getLikeCount(),
                 feedPost.getCreatedAt()
         );
