@@ -22,6 +22,17 @@ public class RefreshTokenService {
                     "    return 0 " +
                     "end";
 
+    private static final String ROTATE_AND_BLACKLIST_SCRIPT =
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then " +
+                    "    redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3]) " +
+                    "    if tonumber(ARGV[5]) > 0 then " +
+                    "        redis.call('SET', KEYS[2], ARGV[4], 'PX', ARGV[5]) " +
+                    "    end " +
+                    "    return 1 " +
+                    "else " +
+                    "    return 0 " +
+                    "end";
+
     private final RedisTemplate<String, String> redisTemplate;
 
     public void save(Long userId, String refreshToken, Duration ttl) {
@@ -41,6 +52,33 @@ public class RefreshTokenService {
                 oldRefreshToken,
                 newRefreshToken,
                 String.valueOf(ttl.toMillis())
+        );
+        return result != null && result == 1L;
+    }
+
+    public boolean rotateAndBlacklist(
+            Long userId,
+            String oldRefreshToken,
+            String newRefreshToken,
+            Duration refreshTtl,
+            String oldAccessJti,
+            long oldAccessRemainingMs
+    ) {
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>(ROTATE_AND_BLACKLIST_SCRIPT, Long.class);
+
+        boolean shouldBlacklist = oldAccessJti != null && oldAccessRemainingMs > 0;
+       String blacklistKey = shouldBlacklist
+                ? TokenBlacklistService.KEY_PREFIX + oldAccessJti
+                : KEY_PREFIX + userId;
+
+        Long result = redisTemplate.execute(
+                script,
+                List.of(KEY_PREFIX + userId, blacklistKey),
+                oldRefreshToken,
+                newRefreshToken,
+                String.valueOf(refreshTtl.toMillis()),
+                TokenBlacklistService.REASON_LOGOUT,
+                String.valueOf(shouldBlacklist ? oldAccessRemainingMs : 0)
         );
         return result != null && result == 1L;
     }
