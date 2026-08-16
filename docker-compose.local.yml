@@ -30,6 +30,10 @@ services:
       REDIS_PORT: 6379
       AI_SERVICE_BASE_URL: http://host.docker.internal:8000
       AI_SERVICE_API_KEY: local-dev-key
+    extra_hosts:
+      # host.docker.internal은 Docker Desktop(Mac/Windows)엔 기본 제공되지만
+      # Linux Docker Engine에선 이렇게 명시해야 호스트로 연결된다.
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy
