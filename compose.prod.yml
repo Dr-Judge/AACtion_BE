@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/dr-judge/aaction_be:latest
+    image: hyunj11/aaction_be:latest
     restart: always
     ports:
       - "8080:8080"
@@ -13,8 +13,14 @@ services:
       JPA_DDL_AUTO: validate
       JWT_SECRET: ${JWT_SECRET}
       FLYWAY_OUT_OF_ORDER: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AI_SERVICE_BASE_URL: ${AI_SERVICE_BASE_URL}
+      AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY}
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   mysql:
@@ -33,5 +39,18 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   mysql_data:
+  redis_data:
