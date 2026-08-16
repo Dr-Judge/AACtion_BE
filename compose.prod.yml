@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/dr-judge/aaction_be:latest
+    image: hyunj11/aaction_be:latest
     restart: always
     ports:
       - "8080:8080"
