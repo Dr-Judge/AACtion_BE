@@ -1,5 +1,6 @@
 package com.likelion.drjudge.domain.feed.entity;
 
+import com.likelion.drjudge.domain.judgment.entity.Judgment;
 import com.likelion.drjudge.domain.user.entity.User;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -17,9 +18,9 @@ public class FeedPost {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ⚠️ judgment 도메인 엔티티가 아직 없어서 FK 관계 대신 Long으로만 참조 (도메인 간 결합 방지).
-    @Column(name = "judgment_id", nullable = false)
-    private Long judgmentId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "judgment_id", nullable = false)
+    private Judgment judgment;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -33,4 +34,23 @@ public class FeedPost {
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    public static FeedPost create(Judgment judgment, User user) {
+        FeedPost feedPost = new FeedPost();
+        feedPost.judgment = judgment;
+        feedPost.user = user;
+        feedPost.isPublic = true;
+        feedPost.likeCount = 0;
+        return feedPost;
+    }
+
+    public void increaseLikeCount() {
+        this.likeCount++;
+    }
+
+    public void decreaseLikeCount() {
+        if (this.likeCount > 0) {
+            this.likeCount--;
+        }
+    }
 }
