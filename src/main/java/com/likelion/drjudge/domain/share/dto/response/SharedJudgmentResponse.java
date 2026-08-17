@@ -4,7 +4,6 @@ import com.likelion.drjudge.domain.judgment.entity.Judgment;
 import com.likelion.drjudge.global.constant.TrustLevel;
 
 public record SharedJudgmentResponse(
-        Long judgmentId,
         TrustLevel trustLevel,
         String evidenceSummary,
         boolean conflictDetected,
@@ -14,7 +13,6 @@ public record SharedJudgmentResponse(
 ) {
     public static SharedJudgmentResponse from(Judgment judgment) {
         return new SharedJudgmentResponse(
-                judgment.getId(),
                 judgment.getTrustLevel(),
                 judgment.getEvidenceSummary(),
                 judgment.isConflictDetected(),
