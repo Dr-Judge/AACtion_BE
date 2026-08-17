@@ -2,10 +2,10 @@ package com.likelion.drjudge.domain.auth.service;
 
 import com.likelion.drjudge.domain.auth.dto.request.LoginRequest;
 import com.likelion.drjudge.domain.auth.dto.request.SignupRequest;
-import com.likelion.drjudge.domain.auth.dto.response.SignupResponse;
-import com.likelion.drjudge.domain.auth.dto.response.TokenResponse;
-import com.likelion.drjudge.domain.auth.dto.response.WithdrawResponse;
+import com.likelion.drjudge.domain.auth.dto.response.*;
 import com.likelion.drjudge.domain.auth.exception.AuthErrorCode;
+import com.likelion.drjudge.domain.auth.kakao.KakaoApiClient;
+import com.likelion.drjudge.domain.auth.kakao.KakaoOAuthClient;
 import com.likelion.drjudge.domain.jwt.jwt.JwtTokenProvider;
 import com.likelion.drjudge.domain.jwt.service.CustomUserPrincipal;
 import com.likelion.drjudge.domain.jwt.service.RefreshTokenService;
@@ -49,6 +49,8 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final KakaoApiClient kakaoApiClient;
+    private final KakaoOAuthClient kakaoOAuthClient;
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
@@ -95,6 +97,56 @@ public class AuthService {
         } catch (BadCredentialsException | UsernameNotFoundException e) {
             throw new BusinessException(AuthErrorCode.INVALID_CREDENTIALS);
         }
+    }
+
+    @Transactional
+    public KakaoAuthResponse kakaoLogin(String code, String redirectUri) {
+        String kakaoAccessToken = kakaoOAuthClient.exchangeCodeForAccessToken(code, redirectUri);
+        KakaoUserInfoResponse kakaoUserInfo = kakaoApiClient.getUserInfo(kakaoAccessToken);
+        String kakaoId = String.valueOf(kakaoUserInfo.id());
+
+        User user = userRepository.findByKakaoId(kakaoId)
+                .orElseGet(() -> registerKakaoUser(kakaoId, kakaoUserInfo));
+
+        if (user.getStatus() == UserStatus.WITHDRAWN) {
+            throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
+        }
+
+        if (!user.isOnboardingCompleted()) {
+            return KakaoAuthResponse.needsOnboarding(user.getId());
+        }
+
+        return KakaoAuthResponse.success(issueTokens(user.getId()), user);
+    }
+
+    private User registerKakaoUser(String kakaoId, KakaoUserInfoResponse kakaoUserInfo) {
+        User user = User.createKakaoUser(kakaoId, kakaoUserInfo.resolveNickname());
+
+        try {
+            return userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            String msg = e.getMostSpecificCause().getMessage();
+            if (msg != null && msg.contains("uq_users_kakao_id")) {
+                return userRepository.findByKakaoId(kakaoId)
+                        .orElseThrow(() -> new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE));
+            }
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public KakaoAuthResponse issueTokensAfterOnboarding(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+
+        if (user.getStatus() == UserStatus.WITHDRAWN) {
+            throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
+        }
+        if (!user.isOnboardingCompleted()) {
+            return KakaoAuthResponse.needsOnboarding(user.getId());
+        }
+
+        return KakaoAuthResponse.success(issueTokens(user.getId()), user);
     }
 
     public TokenResponse reissue(String refreshToken, String oldAccessToken) {

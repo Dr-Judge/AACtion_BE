@@ -77,6 +77,14 @@ public class User {
         return user;
     }
 
+    public static User createKakaoUser(String kakaoId, String nickname) {
+        User user = new User();
+        user.kakaoId = kakaoId;
+        user.nickname = nickname;
+        user.status = UserStatus.ACTIVE;
+        return user;
+    }
+
     public void completeOnboarding(Set<Category> categories, AgeGroup ageGroup, Gender gender) {
         this.interestCategories.clear();
         this.interestCategories.addAll(categories);
