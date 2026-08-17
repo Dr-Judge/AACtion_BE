@@ -40,7 +40,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (claims != null) {
                 String jti = jwtTokenProvider.extractJti(claims);
                 if (tokenBlacklistService.isBlacklisted(jti)) {
-                    request.setAttribute("ALREADY_LOGGED_OUT", true);
+                    if (tokenBlacklistService.isWithdrawn(jti)) {
+                        request.setAttribute("WITHDRAWN_USER", true);
+                    } else {
+                        request.setAttribute("ALREADY_LOGGED_OUT", true);
+                    }
                 } else {
                     try {
                         Long userId = jwtTokenProvider.extractUserId(claims);
