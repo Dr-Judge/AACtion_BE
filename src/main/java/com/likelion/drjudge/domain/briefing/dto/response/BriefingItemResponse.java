@@ -4,17 +4,15 @@ import com.likelion.drjudge.domain.archive.entity.ArchiveItem;
 import com.likelion.drjudge.global.constant.TrustLevel;
 
 public record BriefingItemResponse(
-        Long archiveItemId,
-        Long categoryId,
+        String categoryCode,
         TrustLevel trustLevel,
         String target,
         String effect,
         String evidenceSummary
 ) {
-    public static BriefingItemResponse from(ArchiveItem archiveItem) {
+    public static BriefingItemResponse from(ArchiveItem archiveItem, String categoryCode) {
         return new BriefingItemResponse(
-                archiveItem.getId(),
-                archiveItem.getCategoryId(),
+                categoryCode,
                 archiveItem.getTrustLevel(),
                 archiveItem.getTarget(),
                 archiveItem.getEffect(),
