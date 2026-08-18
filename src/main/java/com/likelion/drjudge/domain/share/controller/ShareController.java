@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/judgments/{judgmentId}/share")
+@RequestMapping("/api/judgments/{judgmentId}/share")
 @RequiredArgsConstructor
 public class ShareController {
 
