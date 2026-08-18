@@ -83,8 +83,8 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/users/me/onboarding").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/share/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users/me/onboarding").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/share/**").permitAll()
                         .requestMatchers("/api/auth/logout").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
