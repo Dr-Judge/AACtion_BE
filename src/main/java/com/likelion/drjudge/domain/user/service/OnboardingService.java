@@ -1,5 +1,7 @@
 package com.likelion.drjudge.domain.user.service;
 
+import com.likelion.drjudge.domain.auth.exception.AuthErrorCode;
+import com.likelion.drjudge.domain.auth.kakao.OnboardingTokenProvider;
 import com.likelion.drjudge.domain.category.entity.Category;
 import com.likelion.drjudge.domain.category.repository.CategoryRepository;
 import com.likelion.drjudge.domain.user.dto.request.OnboardingRequest;
@@ -24,10 +26,15 @@ public class OnboardingService {
 
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
+    private final OnboardingTokenProvider onboardingTokenProvider;
 
-    /** POST /users/me/onboarding — 최초 저장(항상 전체 덮어쓰기). */
     @Transactional
-    public OnboardingResponse saveOnboarding(Long userId, OnboardingRequest request) {
+    public OnboardingResponse saveOnboarding(OnboardingRequest request) {
+        Long userId = onboardingTokenProvider.validateAndGetUserId(request.onboardingToken());
+        if (userId == null) {
+            throw new BusinessException(AuthErrorCode.INVALID_ONBOARDING_TOKEN);
+        }
+
         User user = getUser(userId);
         Set<Category> categories = resolveCategories(request.interestCategoryCodes());
 
@@ -36,7 +43,6 @@ public class OnboardingService {
         return OnboardingResponse.from(user);
     }
 
-    /** PATCH /users/me/onboarding — 전달된 필드만 부분 수정. */
     @Transactional
     public OnboardingResponse updateOnboarding(Long userId, OnboardingUpdateRequest request) {
         User user = getUser(userId);

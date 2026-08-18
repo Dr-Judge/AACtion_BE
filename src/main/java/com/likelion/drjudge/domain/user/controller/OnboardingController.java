@@ -19,18 +19,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/users/me/onboarding")
+@RequestMapping("/api/users/me/onboarding")
 @RequiredArgsConstructor
 public class OnboardingController {
 
     private final OnboardingService onboardingService;
 
-    @Operation(summary = "온보딩 최초 등록", description = "회원가입 절차 중 관심 카테고리·나이대·성별을 최초로 저장한다. 로그인 전(인증 불필요) 호출되며, userId를 요청 본문으로 직접 받는다.")
+    @Operation(summary = "온보딩 최초 등록", description = "회원가입 절차 중 관심 카테고리·나이대·성별을 최초로 저장한다. "
+            + "로그인 전(인증 불필요) 호출되며, 카카오 로그인 응답의 onboardingToken으로 본인을 확인한다.")
     @PostMapping
     public ResponseEntity<ApiResponse<OnboardingResponse>> saveOnboarding(
             @Valid @RequestBody OnboardingRequest request
     ) {
-        OnboardingResponse response = onboardingService.saveOnboarding(request.userId(), request);
+        OnboardingResponse response = onboardingService.saveOnboarding(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 

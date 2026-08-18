@@ -18,7 +18,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/feed/posts")
+@RequestMapping("/api/feed/posts")
 @RequiredArgsConstructor
 @Validated
 public class FeedController {
