@@ -17,6 +17,9 @@ services:
       REDIS_PORT: 6379
       AI_SERVICE_BASE_URL: ${AI_SERVICE_BASE_URL}
       AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY}
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
     depends_on:
       mysql:
         condition: service_healthy
