@@ -1,6 +1,7 @@
 package com.likelion.drjudge.domain.auth.controller;
 
 import com.likelion.drjudge.domain.auth.dto.request.KakaoAuthRequest;
+import com.likelion.drjudge.domain.auth.dto.request.KakaoCompleteRequest;
 import com.likelion.drjudge.domain.auth.dto.request.LoginRequest;
 import com.likelion.drjudge.domain.auth.dto.request.SignupRequest;
 import com.likelion.drjudge.domain.auth.dto.response.KakaoAuthResponse;
@@ -20,8 +21,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -51,8 +50,9 @@ public class AuthController {
     }
 
     @PostMapping("/kakao/complete")
-    public ResponseEntity<KakaoAuthResponse> completeKakaoOnboarding(@RequestBody Map<String, Long> body) {
-        KakaoAuthResponse response = authService.issueTokensAfterOnboarding(body.get("userId"));
+    public ResponseEntity<KakaoAuthResponse> completeKakaoOnboarding(
+            @Valid @RequestBody KakaoCompleteRequest request) {
+        KakaoAuthResponse response = authService.issueTokensAfterOnboarding(request.onboardingToken());
         return ResponseEntity.ok(response);
     }
 

@@ -29,6 +29,7 @@ jwt:
 kakao:
   client-id: ${KAKAO_CLIENT_ID}
   client-secret: ${KAKAO_CLIENT_SECRET:}
+  allowed-redirect-uris: ${KAKAO_ALLOWED_REDIRECT_URIS}
 
 app:
   frontend-base-url: ${FRONTEND_BASE_URL}

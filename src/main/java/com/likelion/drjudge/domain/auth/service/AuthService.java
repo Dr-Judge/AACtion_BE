@@ -6,6 +6,8 @@ import com.likelion.drjudge.domain.auth.dto.response.*;
 import com.likelion.drjudge.domain.auth.exception.AuthErrorCode;
 import com.likelion.drjudge.domain.auth.kakao.KakaoApiClient;
 import com.likelion.drjudge.domain.auth.kakao.KakaoOAuthClient;
+import com.likelion.drjudge.domain.auth.kakao.KakaoUserRegistrar;
+import com.likelion.drjudge.domain.auth.kakao.OnboardingTokenProvider;
 import com.likelion.drjudge.domain.jwt.jwt.JwtTokenProvider;
 import com.likelion.drjudge.domain.jwt.service.CustomUserPrincipal;
 import com.likelion.drjudge.domain.jwt.service.RefreshTokenService;
@@ -19,6 +21,8 @@ import com.likelion.drjudge.global.exception.CommonErrorCode;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -51,6 +55,15 @@ public class AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final KakaoApiClient kakaoApiClient;
     private final KakaoOAuthClient kakaoOAuthClient;
+    private final KakaoUserRegistrar kakaoUserRegistrar;
+    private final OnboardingTokenProvider onboardingTokenProvider;
+
+    private AuthService self;
+
+    @Autowired
+    public void setSelf(@Lazy AuthService self) {
+        this.self = self;
+    }
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
@@ -99,43 +112,38 @@ public class AuthService {
         }
     }
 
-    @Transactional
     public KakaoAuthResponse kakaoLogin(String code, String redirectUri) {
         String kakaoAccessToken = kakaoOAuthClient.exchangeCodeForAccessToken(code, redirectUri);
         KakaoUserInfoResponse kakaoUserInfo = kakaoApiClient.getUserInfo(kakaoAccessToken);
+        return self.processKakaoUser(kakaoUserInfo);
+    }
+
+    @Transactional
+    public KakaoAuthResponse processKakaoUser(KakaoUserInfoResponse kakaoUserInfo) {
         String kakaoId = String.valueOf(kakaoUserInfo.id());
 
         User user = userRepository.findByKakaoId(kakaoId)
-                .orElseGet(() -> registerKakaoUser(kakaoId, kakaoUserInfo));
+                .orElseGet(() -> kakaoUserRegistrar.register(kakaoId, kakaoUserInfo));
 
         if (user.getStatus() == UserStatus.WITHDRAWN) {
             throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
         }
 
         if (!user.isOnboardingCompleted()) {
-            return KakaoAuthResponse.needsOnboarding(user.getId());
+            String onboardingToken = onboardingTokenProvider.createToken(user.getId());
+            return KakaoAuthResponse.needsOnboarding(user.getId(), onboardingToken);
         }
 
         return KakaoAuthResponse.success(issueTokens(user.getId()), user);
     }
 
-    private User registerKakaoUser(String kakaoId, KakaoUserInfoResponse kakaoUserInfo) {
-        User user = User.createKakaoUser(kakaoId, kakaoUserInfo.resolveNickname());
-
-        try {
-            return userRepository.saveAndFlush(user);
-        } catch (DataIntegrityViolationException e) {
-            String msg = e.getMostSpecificCause().getMessage();
-            if (msg != null && msg.contains("uq_users_kakao_id")) {
-                return userRepository.findByKakaoId(kakaoId)
-                        .orElseThrow(() -> new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE));
-            }
-            throw new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE);
-        }
-    }
-
     @Transactional(readOnly = true)
-    public KakaoAuthResponse issueTokensAfterOnboarding(Long userId) {
+    public KakaoAuthResponse issueTokensAfterOnboarding(String onboardingToken) {
+        Long userId = onboardingTokenProvider.validateAndGetUserId(onboardingToken);
+        if (userId == null) {
+            throw new BusinessException(AuthErrorCode.INVALID_ONBOARDING_TOKEN);
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
@@ -143,7 +151,8 @@ public class AuthService {
             throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
         }
         if (!user.isOnboardingCompleted()) {
-            return KakaoAuthResponse.needsOnboarding(user.getId());
+            String newToken = onboardingTokenProvider.createToken(user.getId());
+            return KakaoAuthResponse.needsOnboarding(user.getId(), newToken);
         }
 
         return KakaoAuthResponse.success(issueTokens(user.getId()), user);
