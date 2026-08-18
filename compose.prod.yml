@@ -20,6 +20,7 @@ services:
       AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY}
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET}
+      KAKAO_ALLOWED_REDIRECT_URIS: ${KAKAO_ALLOWED_REDIRECT_URIS}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
     depends_on:
       mysql:
@@ -27,7 +28,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 5s
       timeout: 3s
       retries: 10
