@@ -1,6 +1,6 @@
 services:
   app:
-    image: hyunj11/aaction_be:latest
+    image: hyunj11/aaction_be:${IMAGE_TAG:-latest}
     restart: always
     ports:
       - "8080:8080"
@@ -15,6 +15,7 @@ services:
       FLYWAY_OUT_OF_ORDER: "false"
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # AI 서비스는 별도 서버(가비아 클라우드, 해커톤 지원분)에 떠 있음 — 8/28까지 한시적.
       AI_SERVICE_BASE_URL: ${AI_SERVICE_BASE_URL}
       AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY}
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID}
