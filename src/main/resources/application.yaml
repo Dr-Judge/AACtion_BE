@@ -26,7 +26,13 @@ jwt:
   access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:10800000}
   refresh-token-validity: ${JWT_REFRESH_TOKEN_VALIDITY:1209600000}
 
+kakao:
+  client-id: ${KAKAO_CLIENT_ID}
+  client-secret: ${KAKAO_CLIENT_SECRET:}
+  allowed-redirect-uris: ${KAKAO_ALLOWED_REDIRECT_URIS}
+
 app:
+  frontend-base-url: ${FRONTEND_BASE_URL}
   ai-service:
     base-url: ${AI_SERVICE_BASE_URL}
     api-key: ${AI_SERVICE_API_KEY}
@@ -43,3 +49,4 @@ management:
     web:
       exposure:
         include: health
+

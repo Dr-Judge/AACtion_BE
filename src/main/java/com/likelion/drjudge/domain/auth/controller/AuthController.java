@@ -1,7 +1,10 @@
 package com.likelion.drjudge.domain.auth.controller;
 
+import com.likelion.drjudge.domain.auth.dto.request.KakaoAuthRequest;
+import com.likelion.drjudge.domain.auth.dto.request.KakaoCompleteRequest;
 import com.likelion.drjudge.domain.auth.dto.request.LoginRequest;
 import com.likelion.drjudge.domain.auth.dto.request.SignupRequest;
+import com.likelion.drjudge.domain.auth.dto.response.KakaoAuthResponse;
 import com.likelion.drjudge.domain.auth.dto.response.SignupResponse;
 import com.likelion.drjudge.domain.auth.dto.response.TokenResponse;
 import com.likelion.drjudge.domain.auth.dto.response.WithdrawResponse;
@@ -38,6 +41,19 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request) {
         TokenResponse tokens = authService.login(request);
         return ResponseEntity.ok(ApiResponse.success(tokens));
+    }
+
+    @PostMapping("/kakao")
+    public ResponseEntity<ApiResponse<KakaoAuthResponse>> kakaoLogin(@Valid @RequestBody KakaoAuthRequest request) {
+        KakaoAuthResponse response = authService.kakaoLogin(request.code(), request.redirectUri());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/kakao/complete")
+    public ResponseEntity<ApiResponse<KakaoAuthResponse>> completeKakaoOnboarding(
+            @Valid @RequestBody KakaoCompleteRequest request) {
+        KakaoAuthResponse response = authService.issueTokensAfterOnboarding(request.onboardingToken());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PostMapping("/refresh")
