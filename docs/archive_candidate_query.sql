@@ -27,4 +27,4 @@ LIMIT 30;
 -- 그 값이 실제로 채워지기 전까진 아래 필터를 넣어도 검증할 방법이 없어서 지금은 보류.
 -- 채워지고 나면 이렇게 그룹 단위로 "이미 아카이브로 완전히 커버된 주제"만 제외한다
 -- (그룹 안에 아카이브 안 된 행이 하나라도 있으면 후보로 남겨야 하므로 단순 WHERE로는 부족함):
---   HAVING ask_count >= 2 AND COUNT(archive_item_id) = 0
+--   HAVING ask_count >= 2 AND COUNT(archive_item_id) < COUNT(*)
