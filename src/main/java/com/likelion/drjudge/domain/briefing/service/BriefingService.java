@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,9 +100,11 @@ public class BriefingService {
         if (!dailyBriefingRepository.existsById(briefingId)) {
             throw new BusinessException(BriefingErrorCode.DAILY_BRIEFING_NOT_FOUND);
         }
-        if (briefingViewRepository.existsByUserIdAndDailyBriefingId(userId, briefingId)) {
-            return; // 이미 기록된 열람 — 중복 집계 방지, 에러 없이 그냥 성공 처리
+        try {
+            briefingViewRepository.save(BriefingView.create(userId, briefingId));
+            briefingViewRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            // 이미 기록된 열람 — UNIQUE 제약 위반은 정상 케이스로 간주하고 조용히 성공 처리
         }
-        briefingViewRepository.save(BriefingView.create(userId, briefingId));
     }
 }
