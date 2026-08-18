@@ -8,21 +8,18 @@ public record KakaoAuthResponse(
         String refreshToken,
         KakaoUserDto user,
         boolean isNewUser,
-        Long userId,
         String onboardingToken
 ) {
-
     public static KakaoAuthResponse needsOnboarding(Long userId, String onboardingToken) {
-        return new KakaoAuthResponse(null, null, null, true, userId, onboardingToken);
+        return new KakaoAuthResponse(null, null, null, true, onboardingToken);
     }
 
     public static KakaoAuthResponse success(TokenResponse tokens, User user) {
         return new KakaoAuthResponse(
                 tokens.accessToken(),
                 tokens.refreshToken(),
-                new KakaoUserDto(user.getId(), user.getNickname()),
+                new KakaoUserDto(user.getNickname()),
                 false,
-                user.getId(),
                 null
         );
     }

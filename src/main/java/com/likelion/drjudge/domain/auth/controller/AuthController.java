@@ -44,16 +44,16 @@ public class AuthController {
     }
 
     @PostMapping("/kakao")
-    public ResponseEntity<KakaoAuthResponse> kakaoLogin(@Valid @RequestBody KakaoAuthRequest request) {
+    public ResponseEntity<ApiResponse<KakaoAuthResponse>> kakaoLogin(@Valid @RequestBody KakaoAuthRequest request) {
         KakaoAuthResponse response = authService.kakaoLogin(request.code(), request.redirectUri());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PostMapping("/kakao/complete")
-    public ResponseEntity<KakaoAuthResponse> completeKakaoOnboarding(
+    public ResponseEntity<ApiResponse<KakaoAuthResponse>> completeKakaoOnboarding(
             @Valid @RequestBody KakaoCompleteRequest request) {
         KakaoAuthResponse response = authService.issueTokensAfterOnboarding(request.onboardingToken());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PostMapping("/refresh")

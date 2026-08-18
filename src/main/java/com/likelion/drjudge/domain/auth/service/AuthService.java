@@ -122,8 +122,19 @@ public class AuthService {
     public KakaoAuthResponse processKakaoUser(KakaoUserInfoResponse kakaoUserInfo) {
         String kakaoId = String.valueOf(kakaoUserInfo.id());
 
-        User user = userRepository.findByKakaoId(kakaoId)
-                .orElseGet(() -> kakaoUserRegistrar.register(kakaoId, kakaoUserInfo));
+        User user;
+        try {
+            user = userRepository.findByKakaoId(kakaoId)
+                    .orElseGet(() -> kakaoUserRegistrar.register(kakaoId, kakaoUserInfo));
+        } catch (DataIntegrityViolationException e) {
+            String msg = e.getMostSpecificCause().getMessage();
+            if (msg != null && msg.contains("uq_users_kakao_id")) {
+              user = userRepository.findByKakaoId(kakaoId)
+                        .orElseThrow(() -> new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE));
+            } else {
+                throw new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE);
+            }
+        }
 
         if (user.getStatus() == UserStatus.WITHDRAWN) {
             throw new BusinessException(UserErrorCode.ALREADY_WITHDRAWN);
