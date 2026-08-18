@@ -15,7 +15,8 @@ SELECT
 FROM judgments
 WHERE status = 'COMPLETED'
   AND input_text IS NOT NULL
-  AND TRIM(input_text) <> ''
+  AND input_text REGEXP '[^[:space:]]'  -- TRIM은 스페이스만 지우고 탭/개행은 안 지워서 REGEXP로 검사
+  AND category_id IS NOT NULL  -- ArchiveItem.categoryId는 필수라 없으면 그대로 승격 못 함
 GROUP BY input_text, category_id
 HAVING ask_count >= 2
 ORDER BY ask_count DESC, last_asked_at DESC
