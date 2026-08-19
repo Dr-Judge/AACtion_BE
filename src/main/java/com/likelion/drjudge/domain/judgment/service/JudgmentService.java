@@ -42,6 +42,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -62,25 +63,50 @@ public class JudgmentService {
     private final ObjectMapper objectMapper;
     private final ClovaOcrClient clovaOcrClient;
     private final YoutubeClient youtubeClient;
+    private final TransactionTemplate transactionTemplate;
 
     @Value("${app.judgment.daily-limit:5}")
     private int dailyLimit;
 
-    @Transactional
+    /**
+     * OCR/유튜브 추출은 최대 10초 걸리는 외부 API 호출이라, DB 트랜잭션(커넥션 점유) 밖에서
+     * 실행해야 한다 — 트랜잭션 안에 있으면 동시 요청이 몰릴 때 커넥션 풀이 고갈될 수 있다.
+     * 그래서 "일일 한도 예약(DB)" → "추출(외부 API, 트랜잭션 밖)" → "저장(DB)" 3단계로 쪼갠다.
+     * 같은 빈 안에서 @Transactional 메서드를 직접 호출하면 프록시가 안 걸려서(self-invocation)
+     * TransactionTemplate으로 명시적으로 트랜잭션을 연다.
+     */
     public CreateJudgmentResponse create(Long userId, CreateJudgmentRequest request) {
+        validateInput(request);
+
+        PreparedJudgment prepared = transactionTemplate.execute(status -> reserve(userId, request));
+
+        String extractedText;
+        try {
+            extractedText = extractText(request);
+        } catch (RuntimeException e) {
+            transactionTemplate.executeWithoutResult(status -> refundDailyLimit(userId, LocalDate.now()));
+            throw e;
+        }
+        String maskedText = PiiMasker.mask(extractedText);
+
+        return transactionTemplate.execute(status -> save(prepared, request, maskedText));
+    }
+
+    private PreparedJudgment reserve(Long userId, CreateJudgmentRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
-
-        validateInput(request);
         checkAndIncrementDailyLimit(userId);
-
         Category category = resolveCategory(request.categoryId());
-        String extractedText = extractText(request);
+        return new PreparedJudgment(user, category);
+    }
 
-        Judgment judgment = Judgment.create(user, request.inputType(), extractedText, category);
+    private CreateJudgmentResponse save(PreparedJudgment prepared, CreateJudgmentRequest request, String extractedText) {
+        Judgment judgment = Judgment.create(prepared.user(), request.inputType(), extractedText, prepared.category());
         judgmentRepository.save(judgment);
-
         return new CreateJudgmentResponse(judgment.getId(), judgment.getStatus());
+    }
+
+    private record PreparedJudgment(User user, Category category) {
     }
 
     /**

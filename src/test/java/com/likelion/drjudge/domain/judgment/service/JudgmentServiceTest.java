@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -45,6 +47,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -70,6 +74,8 @@ class JudgmentServiceTest {
     private ClovaOcrClient clovaOcrClient;
     @Mock
     private YoutubeClient youtubeClient;
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     @InjectMocks
     private JudgmentService judgmentService;
@@ -78,6 +84,18 @@ class JudgmentServiceTest {
     void setUp() {
         // @Value는 순수 Mockito 테스트에선 주입 안 되니 수동으로 세팅한다.
         ReflectionTestUtils.setField(judgmentService, "dailyLimit", DAILY_LIMIT);
+
+        // TransactionTemplate mock 기본 동작은 콜백을 실행 안 하고 null을 반환해서,
+        // create()가 실제로 동작하도록 콜백을 그대로 실행해주는 pass-through로 만든다.
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        lenient().doAnswer(invocation -> {
+            java.util.function.Consumer<Object> action = invocation.getArgument(0);
+            action.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
@@ -125,7 +143,7 @@ class JudgmentServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
                 .thenReturn(Optional.empty());
-        when(clovaOcrClient.extractText(anyString()))
+        when(clovaOcrClient.extractText(eq("base64data")))
                 .thenThrow(new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED));
 
         CreateJudgmentRequest request = new CreateJudgmentRequest(InputType.IMAGE, null, "base64data", null, null);
@@ -135,6 +153,8 @@ class JudgmentServiceTest {
 
         assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
         verify(judgmentRepository, never()).save(any());
+        // 추출 실패 시 일일 한도 예약분을 환불하는 트랜잭션이 실제로 실행됐는지 확인한다.
+        verify(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
@@ -143,7 +163,7 @@ class JudgmentServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
                 .thenReturn(Optional.empty());
-        when(youtubeClient.extractText(anyString()))
+        when(youtubeClient.extractText(eq("https://youtube.com/watch?v=x")))
                 .thenThrow(new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED));
 
         CreateJudgmentRequest request =
@@ -154,6 +174,7 @@ class JudgmentServiceTest {
 
         assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
         verify(judgmentRepository, never()).save(any());
+        verify(transactionTemplate).executeWithoutResult(any());
     }
 
     @ParameterizedTest
