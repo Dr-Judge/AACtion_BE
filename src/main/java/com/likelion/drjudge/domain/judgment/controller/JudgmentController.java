@@ -33,7 +33,8 @@ public class JudgmentController {
     @Operation(
             summary = "판정 요청 생성",
             description = "TEXT/IMAGE/LINK 중 하나로 판정을 요청한다. 즉시 202로 judgmentId를 반환하고, "
-                    + "실제 판정은 비동기로 처리된다 (IMAGE/LINK는 OCR/추출 연동 전이라 현재 422로 실패함, task #8).")
+                    + "실제 판정은 비동기로 처리된다. IMAGE는 Clova OCR로, LINK는 유튜브만 지원(YouTube Data API로 "
+                    + "제목+설명 추출, 인스타 등 비지원 링크나 API 키 미설정 시 422 EXTRACTION_FAILED).")
     @PostMapping
     public ResponseEntity<ApiResponse<CreateJudgmentResponse>> create(
             @Valid @RequestBody CreateJudgmentRequest request,

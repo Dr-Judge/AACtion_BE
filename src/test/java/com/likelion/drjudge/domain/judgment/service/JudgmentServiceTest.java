@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -22,6 +24,8 @@ import com.likelion.drjudge.domain.judgment.entity.Judgment;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentRequestCount;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentStatus;
 import com.likelion.drjudge.domain.judgment.exception.JudgmentErrorCode;
+import com.likelion.drjudge.domain.judgment.extraction.ClovaOcrClient;
+import com.likelion.drjudge.domain.judgment.extraction.YoutubeClient;
 import com.likelion.drjudge.domain.judgment.repository.JudgmentRepository;
 import com.likelion.drjudge.domain.judgment.repository.JudgmentRequestCountRepository;
 import com.likelion.drjudge.domain.user.entity.User;
@@ -43,6 +47,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -64,6 +70,12 @@ class JudgmentServiceTest {
     private RestClient aiServiceRestClient;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private ClovaOcrClient clovaOcrClient;
+    @Mock
+    private YoutubeClient youtubeClient;
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     @InjectMocks
     private JudgmentService judgmentService;
@@ -72,6 +84,18 @@ class JudgmentServiceTest {
     void setUp() {
         // @Value는 순수 Mockito 테스트에선 주입 안 되니 수동으로 세팅한다.
         ReflectionTestUtils.setField(judgmentService, "dailyLimit", DAILY_LIMIT);
+
+        // TransactionTemplate mock 기본 동작은 콜백을 실행 안 하고 null을 반환해서,
+        // create()가 실제로 동작하도록 콜백을 그대로 실행해주는 pass-through로 만든다.
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        lenient().doAnswer(invocation -> {
+            java.util.function.Consumer<Object> action = invocation.getArgument(0);
+            action.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
@@ -114,11 +138,13 @@ class JudgmentServiceTest {
     }
 
     @Test
-    void IMAGE_입력은_추출_실패로_거부되고_Judgment가_저장되지_않는다() {
+    void IMAGE_입력은_OCR_추출_실패시_거부되고_Judgment가_저장되지_않는다() {
         User user = mock(User.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
                 .thenReturn(Optional.empty());
+        when(clovaOcrClient.extractText(eq("base64data")))
+                .thenThrow(new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED));
 
         CreateJudgmentRequest request = new CreateJudgmentRequest(InputType.IMAGE, null, "base64data", null, null);
 
@@ -127,14 +153,18 @@ class JudgmentServiceTest {
 
         assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
         verify(judgmentRepository, never()).save(any());
+        // 추출 실패 시 일일 한도 예약분을 환불하는 트랜잭션이 실제로 실행됐는지 확인한다.
+        verify(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
-    void LINK_입력은_추출_실패로_거부되고_Judgment가_저장되지_않는다() {
+    void LINK_입력은_유튜브_추출_실패시_거부되고_Judgment가_저장되지_않는다() {
         User user = mock(User.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
                 .thenReturn(Optional.empty());
+        when(youtubeClient.extractText(eq("https://youtube.com/watch?v=x")))
+                .thenThrow(new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED));
 
         CreateJudgmentRequest request =
                 new CreateJudgmentRequest(InputType.LINK, null, null, "https://youtube.com/watch?v=x", null);
@@ -144,12 +174,13 @@ class JudgmentServiceTest {
 
         assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
         verify(judgmentRepository, never()).save(any());
+        verify(transactionTemplate).executeWithoutResult(any());
     }
 
     @ParameterizedTest
     @EnumSource(TrustLevel.class)
     void AI_서비스가_성공하면_반환된_trustLevel_그대로_COMPLETED로_완료된다(TrustLevel trustLevel) throws Exception {
-        Judgment judgment = Judgment.create(mock(User.class), InputType.TEXT, "테스트 주장", null);
+        Judgment judgment = Judgment.create(mock(User.class), InputType.TEXT, "테스트 주장", null, LocalDate.now());
         when(judgmentRepository.findById(10L)).thenReturn(Optional.of(judgment));
         stubAiServiceSuccess(aiResponse(trustLevel.name()));
         when(objectMapper.writeValueAsString(any())).thenReturn("[]");
@@ -175,9 +206,13 @@ class JudgmentServiceTest {
         User user = mock(User.class);
         when(user.getId()).thenReturn(1L);
 
-        Judgment judgment = Judgment.create(user, InputType.TEXT, "테스트 주장", null);
+        // 일일 한도를 예약한 날짜(requestDate)와 실제 INSERT된 시각(createdAt)이 다른
+        // 상황을 재현한다 — 추출이 자정을 걸쳐서 진행된 경우. 환불은 반드시 requestDate
+        // 기준이어야 하고, createdAt을 참조하면 안 된다.
         LocalDate today = LocalDate.now();
-        ReflectionTestUtils.setField(judgment, "createdAt", today.atStartOfDay());
+        LocalDate nextDay = today.plusDays(1);
+        Judgment judgment = Judgment.create(user, InputType.TEXT, "테스트 주장", null, today);
+        ReflectionTestUtils.setField(judgment, "createdAt", nextDay.atStartOfDay());
         when(judgmentRepository.findById(12L)).thenReturn(Optional.of(judgment));
 
         RestClient.RequestBodyUriSpec uriSpec = mock(RestClient.RequestBodyUriSpec.class);
