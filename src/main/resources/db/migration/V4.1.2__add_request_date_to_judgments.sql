@@ -5,7 +5,9 @@
 ALTER TABLE judgments
     ADD COLUMN request_date DATE AFTER user_id;
 
-UPDATE judgments SET request_date = DATE(created_at) WHERE request_date IS NULL;
+UPDATE judgments
+SET request_date = DATE(created_at)
+WHERE request_date IS NULL;
 
 ALTER TABLE judgments
     MODIFY COLUMN request_date DATE NOT NULL;
