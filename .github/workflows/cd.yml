@@ -48,6 +48,12 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           cd ~/drjudge
+          # 문법 오류가 있는 Caddyfile을 그대로 운영에 복사하면 caddy 컨테이너 재생성이
+          # 실패해서 HTTPS 프록시가 통째로 죽는다 — 복사 전에 같은 이미지로 미리 검증한다.
+          docker run --rm -v "$GITHUB_WORKSPACE/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 \
+            caddy validate --config /etc/caddy/Caddyfile
           cp "$GITHUB_WORKSPACE/compose.prod.yml" compose.prod.yml
+          cp "$GITHUB_WORKSPACE/Caddyfile" Caddyfile
           docker compose -f compose.prod.yml pull
           docker compose -f compose.prod.yml up -d --force-recreate --wait --wait-timeout 60

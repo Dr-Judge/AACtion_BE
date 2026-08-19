@@ -1,0 +1,8 @@
+# 프론트(HTTPS, drjudge.netlify.app)가 백엔드를 호출할 수 있도록 HTTPS를 붙인다.
+# 도메인을 아직 안 사서 sslip.io(IP를 그대로 도메인화해주는 무료 서비스)를 쓴다 —
+# 13-124-27-143.sslip.io는 13.124.27.143으로 그대로 resolve되고, Let's Encrypt가
+# 정상 발급해주는 진짜 공개 DNS 이름이라 Caddy가 인증서를 자동으로 받아온다.
+# EC2 IP가 바뀌면 이 도메인도 같이 바뀌어야 한다(Elastic IP를 쓰면 안 바뀜).
+13-124-27-143.sslip.io {
+    reverse_proxy app:8080
+}
