@@ -22,6 +22,10 @@ services:
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET}
       KAKAO_ALLOWED_REDIRECT_URIS: ${KAKAO_ALLOWED_REDIRECT_URIS}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      # 값이 비어있으면 IMAGE/LINK 판정만 EXTRACTION_FAILED로 처리되고 앱 기동엔 영향 없음.
+      CLOVA_OCR_API_URL: ${CLOVA_OCR_API_URL:-}
+      CLOVA_OCR_SECRET_KEY: ${CLOVA_OCR_SECRET_KEY:-}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
     depends_on:
       mysql:
         condition: service_healthy

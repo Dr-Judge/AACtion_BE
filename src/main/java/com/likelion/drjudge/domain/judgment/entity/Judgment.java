@@ -15,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -33,6 +34,11 @@ public class Judgment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    // 일일 한도를 예약(차감)할 때 실제로 쓴 날짜. created_at(INSERT 시각)과 다를 수 있다
+    // (추출이 자정을 걸치는 경우) — 실패 시 환불은 반드시 이 날짜 기준이어야 한다.
+    @Column(name = "request_date", nullable = false)
+    private LocalDate requestDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "input_type", nullable = false, length = 10)
@@ -84,12 +90,13 @@ public class Judgment {
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    public static Judgment create(User user, InputType inputType, String inputText, Category category) {
+    public static Judgment create(User user, InputType inputType, String inputText, Category category, LocalDate requestDate) {
         Judgment judgment = new Judgment();
         judgment.user = user;
         judgment.inputType = inputType;
         judgment.inputText = inputText;
         judgment.category = category;
+        judgment.requestDate = requestDate;
         judgment.status = JudgmentStatus.PROCESSING;
         judgment.conflictDetected = false;
         return judgment;

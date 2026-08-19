@@ -31,6 +31,16 @@ kakao:
   client-secret: ${KAKAO_CLIENT_SECRET:}
   allowed-redirect-uris: ${KAKAO_ALLOWED_REDIRECT_URIS}
 
+# 값이 비어있으면 해당 입력 타입(IMAGE/LINK)만 EXTRACTION_FAILED로 처리되고
+# 앱 기동 자체는 막지 않는다 (필수 프로퍼티로 만들었다가 배포 사고 낸 적 있어서 전부 기본값 둠).
+clova:
+  ocr:
+    api-url: ${CLOVA_OCR_API_URL:}
+    secret-key: ${CLOVA_OCR_SECRET_KEY:}
+
+youtube:
+  api-key: ${YOUTUBE_API_KEY:}
+
 app:
   frontend-base-url: ${FRONTEND_BASE_URL}
   ai-service:

@@ -20,6 +20,8 @@ import com.likelion.drjudge.domain.judgment.entity.Judgment;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentRequestCount;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentStatus;
 import com.likelion.drjudge.domain.judgment.exception.JudgmentErrorCode;
+import com.likelion.drjudge.domain.judgment.extraction.ClovaOcrClient;
+import com.likelion.drjudge.domain.judgment.extraction.YoutubeClient;
 import com.likelion.drjudge.domain.judgment.repository.JudgmentRepository;
 import com.likelion.drjudge.domain.judgment.repository.JudgmentRequestCountRepository;
 import com.likelion.drjudge.domain.user.entity.User;
@@ -40,6 +42,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -58,25 +61,55 @@ public class JudgmentService {
     private final CategoryRepository categoryRepository;
     private final RestClient aiServiceRestClient;
     private final ObjectMapper objectMapper;
+    private final ClovaOcrClient clovaOcrClient;
+    private final YoutubeClient youtubeClient;
+    private final TransactionTemplate transactionTemplate;
 
     @Value("${app.judgment.daily-limit:5}")
     private int dailyLimit;
 
-    @Transactional
+    /**
+     * OCR/유튜브 추출은 최대 10초 걸리는 외부 API 호출이라, DB 트랜잭션(커넥션 점유) 밖에서
+     * 실행해야 한다 — 트랜잭션 안에 있으면 동시 요청이 몰릴 때 커넥션 풀이 고갈될 수 있다.
+     * 그래서 "일일 한도 예약(DB)" → "추출(외부 API, 트랜잭션 밖)" → "저장(DB)" 3단계로 쪼갠다.
+     * 같은 빈 안에서 @Transactional 메서드를 직접 호출하면 프록시가 안 걸려서(self-invocation)
+     * TransactionTemplate으로 명시적으로 트랜잭션을 연다.
+     */
     public CreateJudgmentResponse create(Long userId, CreateJudgmentRequest request) {
+        validateInput(request);
+
+        PreparedJudgment prepared = transactionTemplate.execute(status -> reserve(userId, request));
+
+        // 예약 이후(추출~저장) 어디서 실패하든, 예약 때 실제로 썼던 날짜 그대로 환불한다.
+        // LocalDate.now()를 환불 시점에 다시 계산하면 자정을 걸친 요청에서 엉뚱한 날짜를
+        // 환불하고 원래 예약분은 영영 안 풀리는 버그가 생긴다.
+        try {
+            String extractedText = extractText(request);
+            String maskedText = PiiMasker.mask(extractedText);
+            return transactionTemplate.execute(status -> save(prepared, request, maskedText));
+        } catch (RuntimeException e) {
+            transactionTemplate.executeWithoutResult(status -> refundDailyLimit(userId, prepared.requestDate()));
+            throw e;
+        }
+    }
+
+    private PreparedJudgment reserve(Long userId, CreateJudgmentRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
-
-        validateInput(request);
-        checkAndIncrementDailyLimit(userId);
-
+        LocalDate requestDate = LocalDate.now();
+        checkAndIncrementDailyLimit(userId, requestDate);
         Category category = resolveCategory(request.categoryId());
-        String extractedText = extractText(request);
+        return new PreparedJudgment(user, category, requestDate);
+    }
 
-        Judgment judgment = Judgment.create(user, request.inputType(), extractedText, category);
+    private CreateJudgmentResponse save(PreparedJudgment prepared, CreateJudgmentRequest request, String extractedText) {
+        Judgment judgment = Judgment.create(
+                prepared.user(), request.inputType(), extractedText, prepared.category(), prepared.requestDate());
         judgmentRepository.save(judgment);
-
         return new CreateJudgmentResponse(judgment.getId(), judgment.getStatus());
+    }
+
+    private record PreparedJudgment(User user, Category category, LocalDate requestDate) {
     }
 
     /**
@@ -153,21 +186,17 @@ public class JudgmentService {
                 .orElseThrow(() -> new BusinessException(CategoryErrorCode.INVALID_CATEGORY));
     }
 
-    /**
-     * TODO: Clova OCR(IMAGE), YouTube 메타데이터/자막 추출(LINK) 아직 연동 전.
-     * 지금은 TEXT만 실제로 동작하고, IMAGE/LINK는 추출 실패로 처리한다.
-     */
     private String extractText(CreateJudgmentRequest request) {
         return switch (request.inputType()) {
             case TEXT -> request.text();
-            case IMAGE, LINK -> throw new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED);
+            case IMAGE -> clovaOcrClient.extractText(request.imageBase64());
+            case LINK -> youtubeClient.extractText(request.url());
         };
     }
 
-    private void checkAndIncrementDailyLimit(Long userId) {
-        LocalDate today = LocalDate.now();
-        JudgmentRequestCount count = requestCountRepository.findByUserIdAndRequestDate(userId, today)
-                .orElseGet(() -> JudgmentRequestCount.create(userId, today));
+    private void checkAndIncrementDailyLimit(Long userId, LocalDate requestDate) {
+        JudgmentRequestCount count = requestCountRepository.findByUserIdAndRequestDate(userId, requestDate)
+                .orElseGet(() -> JudgmentRequestCount.create(userId, requestDate));
 
         if (count.getRequestCount() >= dailyLimit) {
             throw new BusinessException(JudgmentErrorCode.DAILY_LIMIT_EXCEEDED);
@@ -219,7 +248,7 @@ public class JudgmentService {
 
     private void failJudgment(Judgment judgment, String errorCode) {
         judgment.fail(errorCode);
-        refundDailyLimit(judgment.getUser().getId(), judgment.getCreatedAt().toLocalDate());
+        refundDailyLimit(judgment.getUser().getId(), judgment.getRequestDate());
     }
 
     private JudgmentDetailResponse toDetailResponse(Judgment judgment) {
