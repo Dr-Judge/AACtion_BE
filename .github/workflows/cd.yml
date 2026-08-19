@@ -49,5 +49,6 @@ jobs:
         run: |
           cd ~/drjudge
           cp "$GITHUB_WORKSPACE/compose.prod.yml" compose.prod.yml
+          cp "$GITHUB_WORKSPACE/Caddyfile" Caddyfile
           docker compose -f compose.prod.yml pull
           docker compose -f compose.prod.yml up -d --force-recreate --wait --wait-timeout 60
