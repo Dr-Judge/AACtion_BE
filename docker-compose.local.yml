@@ -30,6 +30,12 @@ services:
       REDIS_PORT: 6379
       AI_SERVICE_BASE_URL: http://host.docker.internal:8000
       AI_SERVICE_API_KEY: local-dev-key
+      # 카카오 로그인은 로컬에서 실제로 안 써도, 서버 기동 자체가 이 값들을 요구한다.
+      # 더미값이라 실제 카카오 로그인 버튼 누르면 실패하는 게 정상 — 그 기능만 테스트
+      # 못 하는 거고 나머지 API는 다 정상 작동한다.
+      KAKAO_CLIENT_ID: local-dev-dummy-client-id
+      KAKAO_CLIENT_SECRET: local-dev-dummy-client-secret
+      KAKAO_ALLOWED_REDIRECT_URIS: http://localhost:3000/kakao-callback
     extra_hosts:
       # host.docker.internal은 Docker Desktop(Mac/Windows)엔 기본 제공되지만
       # Linux Docker Engine에선 이렇게 명시해야 호스트로 연결된다.
