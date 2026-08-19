@@ -14,9 +14,10 @@ services:
         condition: service_healthy
     healthcheck:
       # 컨테이너가 떠 있다고 인증서 발급·리버스프록시까지 됐다는 보장은 없다 —
-      # 실제로 app까지 프록시되는지 확인한다. Host 헤더를 실제 도메인으로 맞춰야
-      # Caddyfile의 site block에 매칭된다.
-      test: ["CMD", "wget", "-q", "--no-check-certificate", "--header=Host: 13-124-27-143.sslip.io", "--spider", "https://localhost/api/health"]
+      # 실제로 app까지 프록시되는지 확인한다. --resolve로 DNS/외부 라우팅 없이
+      # 127.0.0.1로 직접 붙으면서도 TLS는 실제 도메인 이름으로 협상하므로,
+      # 인증서 체인·호스트네임 검증까지 정상적으로 된다(우회 없음).
+      test: ["CMD", "curl", "-fsS", "--resolve", "13-124-27-143.sslip.io:443:127.0.0.1", "https://13-124-27-143.sslip.io/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
