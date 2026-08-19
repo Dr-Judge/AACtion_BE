@@ -80,24 +80,26 @@ public class JudgmentService {
 
         PreparedJudgment prepared = transactionTemplate.execute(status -> reserve(userId, request));
 
-        String extractedText;
+        // 예약 이후(추출~저장) 어디서 실패하든, 예약 때 실제로 썼던 날짜 그대로 환불한다.
+        // LocalDate.now()를 환불 시점에 다시 계산하면 자정을 걸친 요청에서 엉뚱한 날짜를
+        // 환불하고 원래 예약분은 영영 안 풀리는 버그가 생긴다.
         try {
-            extractedText = extractText(request);
+            String extractedText = extractText(request);
+            String maskedText = PiiMasker.mask(extractedText);
+            return transactionTemplate.execute(status -> save(prepared, request, maskedText));
         } catch (RuntimeException e) {
-            transactionTemplate.executeWithoutResult(status -> refundDailyLimit(userId, LocalDate.now()));
+            transactionTemplate.executeWithoutResult(status -> refundDailyLimit(userId, prepared.requestDate()));
             throw e;
         }
-        String maskedText = PiiMasker.mask(extractedText);
-
-        return transactionTemplate.execute(status -> save(prepared, request, maskedText));
     }
 
     private PreparedJudgment reserve(Long userId, CreateJudgmentRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
-        checkAndIncrementDailyLimit(userId);
+        LocalDate requestDate = LocalDate.now();
+        checkAndIncrementDailyLimit(userId, requestDate);
         Category category = resolveCategory(request.categoryId());
-        return new PreparedJudgment(user, category);
+        return new PreparedJudgment(user, category, requestDate);
     }
 
     private CreateJudgmentResponse save(PreparedJudgment prepared, CreateJudgmentRequest request, String extractedText) {
@@ -106,7 +108,7 @@ public class JudgmentService {
         return new CreateJudgmentResponse(judgment.getId(), judgment.getStatus());
     }
 
-    private record PreparedJudgment(User user, Category category) {
+    private record PreparedJudgment(User user, Category category, LocalDate requestDate) {
     }
 
     /**
@@ -191,10 +193,9 @@ public class JudgmentService {
         };
     }
 
-    private void checkAndIncrementDailyLimit(Long userId) {
-        LocalDate today = LocalDate.now();
-        JudgmentRequestCount count = requestCountRepository.findByUserIdAndRequestDate(userId, today)
-                .orElseGet(() -> JudgmentRequestCount.create(userId, today));
+    private void checkAndIncrementDailyLimit(Long userId, LocalDate requestDate) {
+        JudgmentRequestCount count = requestCountRepository.findByUserIdAndRequestDate(userId, requestDate)
+                .orElseGet(() -> JudgmentRequestCount.create(userId, requestDate));
 
         if (count.getRequestCount() >= dailyLimit) {
             throw new BusinessException(JudgmentErrorCode.DAILY_LIMIT_EXCEEDED);

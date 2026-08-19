@@ -26,12 +26,11 @@ public class ClovaOcrClient {
     private static final int CONNECT_TIMEOUT_MS = 3_000;
     private static final int READ_TIMEOUT_MS = 10_000;
     private static final Pattern DATA_URI_PATTERN = Pattern.compile("^data:image/([a-zA-Z]+);base64,(.+)$", Pattern.DOTALL);
-    // Clova OCR 일반 OCR API가 지원하는 형식만 매핑한다.
+    // Clova 일반 OCR API가 지원하는 형식만 매핑한다 (bmp는 미지원이라 뺌).
     private static final Map<String, String> MIME_SUBTYPE_TO_CLOVA_FORMAT = Map.of(
             "jpeg", "jpg",
             "jpg", "jpg",
             "png", "png",
-            "bmp", "bmp",
             "tiff", "tiff"
     );
 
