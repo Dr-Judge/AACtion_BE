@@ -10,7 +10,17 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - app
+      app:
+        condition: service_healthy
+    healthcheck:
+      # 컨테이너가 떠 있다고 인증서 발급·리버스프록시까지 됐다는 보장은 없다 —
+      # 실제로 app까지 프록시되는지 확인한다. Host 헤더를 실제 도메인으로 맞춰야
+      # Caddyfile의 site block에 매칭된다.
+      test: ["CMD", "wget", "-q", "--no-check-certificate", "--header=Host: 13-124-27-143.sslip.io", "--spider", "https://localhost/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   app:
     image: hyunj11/aaction_be:${IMAGE_TAG:-latest}
