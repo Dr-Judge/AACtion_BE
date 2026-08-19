@@ -20,6 +20,8 @@ import com.likelion.drjudge.domain.judgment.entity.Judgment;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentRequestCount;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentStatus;
 import com.likelion.drjudge.domain.judgment.exception.JudgmentErrorCode;
+import com.likelion.drjudge.domain.judgment.extraction.ClovaOcrClient;
+import com.likelion.drjudge.domain.judgment.extraction.YoutubeClient;
 import com.likelion.drjudge.domain.judgment.repository.JudgmentRepository;
 import com.likelion.drjudge.domain.judgment.repository.JudgmentRequestCountRepository;
 import com.likelion.drjudge.domain.user.entity.User;
@@ -58,6 +60,8 @@ public class JudgmentService {
     private final CategoryRepository categoryRepository;
     private final RestClient aiServiceRestClient;
     private final ObjectMapper objectMapper;
+    private final ClovaOcrClient clovaOcrClient;
+    private final YoutubeClient youtubeClient;
 
     @Value("${app.judgment.daily-limit:5}")
     private int dailyLimit;
@@ -153,14 +157,11 @@ public class JudgmentService {
                 .orElseThrow(() -> new BusinessException(CategoryErrorCode.INVALID_CATEGORY));
     }
 
-    /**
-     * TODO: Clova OCR(IMAGE), YouTube 메타데이터/자막 추출(LINK) 아직 연동 전.
-     * 지금은 TEXT만 실제로 동작하고, IMAGE/LINK는 추출 실패로 처리한다.
-     */
     private String extractText(CreateJudgmentRequest request) {
         return switch (request.inputType()) {
             case TEXT -> request.text();
-            case IMAGE, LINK -> throw new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED);
+            case IMAGE -> clovaOcrClient.extractText(request.imageBase64());
+            case LINK -> youtubeClient.extractText(request.url());
         };
     }
 

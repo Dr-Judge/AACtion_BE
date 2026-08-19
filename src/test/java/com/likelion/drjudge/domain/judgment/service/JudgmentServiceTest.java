@@ -22,6 +22,8 @@ import com.likelion.drjudge.domain.judgment.entity.Judgment;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentRequestCount;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentStatus;
 import com.likelion.drjudge.domain.judgment.exception.JudgmentErrorCode;
+import com.likelion.drjudge.domain.judgment.extraction.ClovaOcrClient;
+import com.likelion.drjudge.domain.judgment.extraction.YoutubeClient;
 import com.likelion.drjudge.domain.judgment.repository.JudgmentRepository;
 import com.likelion.drjudge.domain.judgment.repository.JudgmentRequestCountRepository;
 import com.likelion.drjudge.domain.user.entity.User;
@@ -64,6 +66,10 @@ class JudgmentServiceTest {
     private RestClient aiServiceRestClient;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private ClovaOcrClient clovaOcrClient;
+    @Mock
+    private YoutubeClient youtubeClient;
 
     @InjectMocks
     private JudgmentService judgmentService;
@@ -114,11 +120,13 @@ class JudgmentServiceTest {
     }
 
     @Test
-    void IMAGE_입력은_추출_실패로_거부되고_Judgment가_저장되지_않는다() {
+    void IMAGE_입력은_OCR_추출_실패시_거부되고_Judgment가_저장되지_않는다() {
         User user = mock(User.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
                 .thenReturn(Optional.empty());
+        when(clovaOcrClient.extractText(anyString()))
+                .thenThrow(new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED));
 
         CreateJudgmentRequest request = new CreateJudgmentRequest(InputType.IMAGE, null, "base64data", null, null);
 
@@ -130,11 +138,13 @@ class JudgmentServiceTest {
     }
 
     @Test
-    void LINK_입력은_추출_실패로_거부되고_Judgment가_저장되지_않는다() {
+    void LINK_입력은_유튜브_추출_실패시_거부되고_Judgment가_저장되지_않는다() {
         User user = mock(User.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
                 .thenReturn(Optional.empty());
+        when(youtubeClient.extractText(anyString()))
+                .thenThrow(new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED));
 
         CreateJudgmentRequest request =
                 new CreateJudgmentRequest(InputType.LINK, null, null, "https://youtube.com/watch?v=x", null);
