@@ -180,7 +180,7 @@ class JudgmentServiceTest {
     @ParameterizedTest
     @EnumSource(TrustLevel.class)
     void AI_서비스가_성공하면_반환된_trustLevel_그대로_COMPLETED로_완료된다(TrustLevel trustLevel) throws Exception {
-        Judgment judgment = Judgment.create(mock(User.class), InputType.TEXT, "테스트 주장", null);
+        Judgment judgment = Judgment.create(mock(User.class), InputType.TEXT, "테스트 주장", null, LocalDate.now());
         when(judgmentRepository.findById(10L)).thenReturn(Optional.of(judgment));
         stubAiServiceSuccess(aiResponse(trustLevel.name()));
         when(objectMapper.writeValueAsString(any())).thenReturn("[]");
@@ -206,9 +206,13 @@ class JudgmentServiceTest {
         User user = mock(User.class);
         when(user.getId()).thenReturn(1L);
 
-        Judgment judgment = Judgment.create(user, InputType.TEXT, "테스트 주장", null);
+        // 일일 한도를 예약한 날짜(requestDate)와 실제 INSERT된 시각(createdAt)이 다른
+        // 상황을 재현한다 — 추출이 자정을 걸쳐서 진행된 경우. 환불은 반드시 requestDate
+        // 기준이어야 하고, createdAt을 참조하면 안 된다.
         LocalDate today = LocalDate.now();
-        ReflectionTestUtils.setField(judgment, "createdAt", today.atStartOfDay());
+        LocalDate nextDay = today.plusDays(1);
+        Judgment judgment = Judgment.create(user, InputType.TEXT, "테스트 주장", null, today);
+        ReflectionTestUtils.setField(judgment, "createdAt", nextDay.atStartOfDay());
         when(judgmentRepository.findById(12L)).thenReturn(Optional.of(judgment));
 
         RestClient.RequestBodyUriSpec uriSpec = mock(RestClient.RequestBodyUriSpec.class);

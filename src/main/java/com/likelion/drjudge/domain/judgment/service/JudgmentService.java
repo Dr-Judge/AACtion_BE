@@ -103,7 +103,8 @@ public class JudgmentService {
     }
 
     private CreateJudgmentResponse save(PreparedJudgment prepared, CreateJudgmentRequest request, String extractedText) {
-        Judgment judgment = Judgment.create(prepared.user(), request.inputType(), extractedText, prepared.category());
+        Judgment judgment = Judgment.create(
+                prepared.user(), request.inputType(), extractedText, prepared.category(), prepared.requestDate());
         judgmentRepository.save(judgment);
         return new CreateJudgmentResponse(judgment.getId(), judgment.getStatus());
     }
@@ -247,7 +248,7 @@ public class JudgmentService {
 
     private void failJudgment(Judgment judgment, String errorCode) {
         judgment.fail(errorCode);
-        refundDailyLimit(judgment.getUser().getId(), judgment.getCreatedAt().toLocalDate());
+        refundDailyLimit(judgment.getUser().getId(), judgment.getRequestDate());
     }
 
     private JudgmentDetailResponse toDetailResponse(Judgment judgment) {
