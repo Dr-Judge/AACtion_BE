@@ -37,6 +37,10 @@ services:
   mysql:
     image: mysql:8
     restart: always
+    # 아카이브 CSV 동기화(sync_archive_csv.py, ingest.py)를 로컬/가비아 서버에서 직접
+    # 돌리려고 노출. 보안그룹에서 특정 IP(작업자 IP, 가비아 서버 IP)로만 접근 허용할 것.
+    ports:
+      - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: drjudge
