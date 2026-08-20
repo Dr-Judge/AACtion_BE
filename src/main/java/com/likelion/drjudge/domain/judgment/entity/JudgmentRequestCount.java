@@ -11,13 +11,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * @Id를 자동증가가 아니라 (userId, requestDate)로 직접 할당한다. 예전엔 Persistable을 구현해
- * INSERT/UPDATE를 애플리케이션이 직접 구분했으나, 운영에서 신규 행 첫 요청마다
- * StaleObjectStateException(merge가 UPDATE 0행)이 재현되는 문제가 있었다 — 원인 불문하고
- * "새 엔티티 vs 기존 엔티티" 구분 자체를 코드에서 없애는 쪽으로 바꿨다. 이제 항상
- * {@link com.likelion.drjudge.domain.judgment.repository.JudgmentRequestCountRepository#ensureRowExists}
- * (INSERT ... ON DUPLICATE KEY UPDATE)로 행 존재를 먼저 보장한 뒤, 조회해서 얻은(이미 영속 상태인)
- * 엔티티만 증가시킨다 — save()를 호출할 일 자체가 없어 isNew 판정이 필요 없다.
+ * @Id를 자동증가가 아니라 (userId, requestDate)로 직접 할당한다. 신규 행은
+ * {@link com.likelion.drjudge.domain.judgment.service.JudgmentService}가
+ * EntityManager.persist()로 직접 영속화하고, 기존 행의 증가/감소는
+ * {@link com.likelion.drjudge.domain.judgment.repository.JudgmentRequestCountRepository}의
+ * 명시적 UPDATE 쿼리로 처리한다 — 이 엔티티를 로드해서 필드를 바꾸고 Hibernate의 dirty
+ * checking에 맡기는 방식은 운영에서 "Unexpected row count" 오류로 반복 실패해 쓰지 않는다.
  */
 @Entity
 @Table(name = "judgment_request_counts")
@@ -47,11 +46,5 @@ public class JudgmentRequestCount {
 
     public void increment() {
         this.requestCount++;
-    }
-
-    public void decrement() {
-        if (this.requestCount > 0) {
-            this.requestCount--;
-        }
     }
 }
