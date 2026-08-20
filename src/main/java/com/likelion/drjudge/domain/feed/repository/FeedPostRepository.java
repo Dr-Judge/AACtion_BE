@@ -12,4 +12,6 @@ public interface FeedPostRepository extends JpaRepository<FeedPost, Long> {
     Page<FeedPost> findByIsPublicTrueOrderByCreatedAtDescIdDesc(Pageable pageable);
 
     Page<FeedPost> findByIsPublicTrueOrderByLikeCountDescIdDesc(Pageable pageable);
+
+    boolean existsByJudgmentId(Long id);
 }
