@@ -116,4 +116,8 @@ public class User {
     public void withdraw() {
         this.status = UserStatus.WITHDRAWN;
     }
+
+    public void increasePoint(int amount) {
+        this.pointBalance += amount;
+    }
 }

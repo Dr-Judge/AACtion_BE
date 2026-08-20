@@ -15,7 +15,8 @@ public enum FeedErrorCode implements ErrorCode {
     NOT_JUDGMENT_OWNER("FEED_004", "본인의 판정 결과만 게시할 수 있습니다.", HttpStatus.FORBIDDEN),
     JUDGMENT_NOT_COMPLETED("FEED_005", "판정이 완료된 카드만 게시할 수 있습니다.", HttpStatus.CONFLICT),
     NOT_POST_OWNER("FEED_006", "본인이 게시한 카드만 삭제할 수 있습니다.", HttpStatus.FORBIDDEN),
-    LIKE_NOT_FOUND("FEED_007", "좋아요를 누르지 않은 게시물입니다.", HttpStatus.BAD_REQUEST);
+    LIKE_NOT_FOUND("FEED_007", "좋아요를 누르지 않은 게시물입니다.", HttpStatus.BAD_REQUEST),
+    ALREADY_POSTED("FEED_008", "이미 공유 피드에 게시된 판정입니다.", HttpStatus.CONFLICT);
 
     private final String code;
     private final String message;
