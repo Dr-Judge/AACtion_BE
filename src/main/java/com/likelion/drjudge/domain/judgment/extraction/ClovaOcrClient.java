@@ -38,10 +38,17 @@ public class ClovaOcrClient {
     // 포맷을 추정한다 — 프론트가 "data:image/...;base64," 헤더를 잘라내고 순수 base64만
     // 보내는 경우가 실제로 있어서(클라이언트마다 관례가 다름), 접두사 유무와 무관하게
     // 실제 바이트를 근거로 판단하는 쪽이 더 견고하다.
-    private static final byte[] PNG_MAGIC = {(byte) 0x89, 0x50, 0x4E, 0x47};
+    // PNG는 8바이트 서명 전체를 비교한다 - 앞 4바이트만 보면 89 50 4E 47 00 00 00 00처럼
+    // PNG가 아닌 입력도 png로 잘못 분류될 수 있다.
+    private static final byte[] PNG_MAGIC =
+            {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
     private static final byte[] JPEG_MAGIC = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
     private static final byte[] TIFF_LE_MAGIC = {0x49, 0x49, 0x2A, 0x00};
     private static final byte[] TIFF_BE_MAGIC = {0x4D, 0x4D, 0x00, 0x2A};
+    // RequestBodySizeFilter는 Content-Length 헤더 기반이라 chunked 요청은 못 막는다
+    // (그 필터 자체의 문서화된 한계). 여기서는 그것과 무관하게, base64 디코딩으로 큰
+    // byte[]를 할당하기 전에 자체적으로 한 번 더 길이를 제한한다.
+    private static final int MAX_BASE64_LENGTH = 15_000_000; // 디코딩 시 약 11MB
 
     private final RestClient restClient;
     private final String apiUrl;
@@ -133,6 +140,10 @@ public class ClovaOcrClient {
     }
 
     private String sniffFormatFromBytes(String base64) {
+        if (base64.length() > MAX_BASE64_LENGTH) {
+            log.warn("event=clova_ocr_image_too_large length={}", base64.length());
+            return null;
+        }
         byte[] bytes;
         try {
             bytes = Base64.getDecoder().decode(base64);

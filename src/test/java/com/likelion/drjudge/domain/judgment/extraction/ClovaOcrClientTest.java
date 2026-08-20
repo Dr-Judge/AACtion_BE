@@ -3,6 +3,7 @@ package com.likelion.drjudge.domain.judgment.extraction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.likelion.drjudge.domain.judgment.exception.JudgmentErrorCode;
 import com.likelion.drjudge.global.exception.BusinessException;
 import java.util.Base64;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,9 @@ class ClovaOcrClientTest {
     void data_URI_접두사에_미지원_MIME이면_EXTRACTION_FAILED() {
         String input = "data:image/bmp;base64," + base64Of(1, 2, 3);
 
-        assertThrows(BusinessException.class, () -> client.parseDataUri(input));
+        BusinessException exception =
+                assertThrows(BusinessException.class, () -> client.parseDataUri(input));
+        assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
     }
 
     @Test
@@ -69,11 +72,34 @@ class ClovaOcrClientTest {
     void 접두사도_없고_알려진_매직넘버도_아니면_EXTRACTION_FAILED() {
         String raw = base64Of(0x00, 0x01, 0x02, 0x03);
 
-        assertThrows(BusinessException.class, () -> client.parseDataUri(raw));
+        BusinessException exception =
+                assertThrows(BusinessException.class, () -> client.parseDataUri(raw));
+        assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
     }
 
     @Test
     void base64로도_디코딩되지_않는_문자열이면_EXTRACTION_FAILED() {
-        assertThrows(BusinessException.class, () -> client.parseDataUri("!!! not base64 !!!"));
+        BusinessException exception =
+                assertThrows(BusinessException.class, () -> client.parseDataUri("!!! not base64 !!!"));
+        assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
+    }
+
+    @Test
+    void PNG_서명_앞_4바이트만_일치하고_뒤가_다르면_png로_오인하지_않는다() {
+        // 89 50 4E 47 까지는 PNG 서명과 같지만, 나머지 4바이트가 진짜 PNG 서명(0D 0A 1A 0A)과 다르다.
+        String raw = base64Of(0x89, 0x50, 0x4E, 0x47, 0x00, 0x00, 0x00, 0x00);
+
+        BusinessException exception =
+                assertThrows(BusinessException.class, () -> client.parseDataUri(raw));
+        assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
+    }
+
+    @Test
+    void base64_길이가_너무_길면_디코딩하지_않고_EXTRACTION_FAILED() {
+        String tooLong = "A".repeat(15_000_001);
+
+        BusinessException exception =
+                assertThrows(BusinessException.class, () -> client.parseDataUri(tooLong));
+        assertEquals(JudgmentErrorCode.EXTRACTION_FAILED, exception.getErrorCode());
     }
 }
