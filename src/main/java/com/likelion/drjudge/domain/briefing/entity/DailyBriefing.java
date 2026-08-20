@@ -33,4 +33,12 @@ public class DailyBriefing {
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    public static DailyBriefing create(LocalDate briefingDate, Long archiveItemId, Long categoryId) {
+        DailyBriefing briefing = new DailyBriefing();
+        briefing.briefingDate = briefingDate;
+        briefing.archiveItemId = archiveItemId;
+        briefing.categoryId = categoryId;
+        return briefing;
+    }
 }
