@@ -50,7 +50,8 @@ class JudgmentRequestCountRepositoryTest {
         JudgmentRequestCount loaded =
                 repository.findByUserIdAndRequestDate(2L, LocalDate.now()).orElseThrow();
         loaded.increment();
-        repository.save(loaded);
+        // loaded는 이미 영속 상태(managed)라 dirty checking으로 flush 시 자동 반영된다 —
+        // 여기서 save()를 또 호출하면 merge()를 불필요하게 다시 타게 된다.
         entityManager.flush();
         entityManager.clear();
 
