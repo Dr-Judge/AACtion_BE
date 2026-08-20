@@ -53,6 +53,7 @@ import org.springframework.web.client.RestClient;
 public class JudgmentService {
 
     private static final int MAX_PAGE_SIZE = 50;
+    private static final int MAX_TITLE_LENGTH = 255; // judgments.title VARCHAR(255)
     private static final String AI_SERVICE_ENDPOINT = "/internal/api/v1/judgments";
 
     private final JudgmentRepository judgmentRepository;
@@ -234,6 +235,7 @@ public class JudgmentService {
         boolean detected = response.conflictOfInterest() != null && response.conflictOfInterest().detected();
 
         judgment.complete(
+                validateTitle(response.title()),
                 TrustLevel.valueOf(response.trustLevel()),
                 response.evidenceSummary(),
                 detected,
@@ -246,6 +248,27 @@ public class JudgmentService {
         );
     }
 
+    /**
+     * 계약상 title은 필수·non-blank지만 Jackson 역직렬화만으로는 강제되지 않는다.
+     * 비어있으면 AI 응답 자체를 신뢰할 수 없다고 보고 실패 처리한다(호출부의 catch에서
+     * failJudgment로 이어져 FAILED 처리 + 일일 한도 환불까지 됨). 길이 초과는 컬럼
+     * 제약(VARCHAR(255)) 위반으로 커밋이 깨지는 걸 막기 위해 잘라내되, 판정 자체는
+     * 그대로 완료시킨다 — 제목은 부가 정보라 이것 때문에 전체 판정을 실패시킬 정도는 아니다.
+     */
+    private String validateTitle(String title) {
+        if (title == null || title.isBlank()) {
+            throw new IllegalStateException("AI 응답의 title이 비어있습니다.");
+        }
+        // substring(0, n)은 UTF-16 코드 유닛 기준이라 서로게이트 쌍(이모지 등) 중간을
+        // 잘라 깨진 문자를 남길 수 있다. MySQL VARCHAR(255)도 코드 포인트 기준으로 길이를
+        // 세므로 codePointCount/offsetByCodePoints로 맞춰 자른다.
+        if (title.codePointCount(0, title.length()) <= MAX_TITLE_LENGTH) {
+            return title;
+        }
+        int cutIndex = title.offsetByCodePoints(0, MAX_TITLE_LENGTH);
+        return title.substring(0, cutIndex);
+    }
+
     private void failJudgment(Judgment judgment, String errorCode) {
         judgment.fail(errorCode);
         refundDailyLimit(judgment.getUser().getId(), judgment.getRequestDate());
@@ -256,7 +279,7 @@ public class JudgmentService {
 
         if (judgment.getStatus() == JudgmentStatus.COMPLETED) {
             return new JudgmentDetailResponse(
-                    judgment.getId(), judgment.getStatus(),
+                    judgment.getId(), judgment.getStatus(), judgment.getTitle(),
                     judgment.getTrustLevel().name(), judgment.getTrustLevel().getLabel(),
                     judgment.getEvidenceSummary(),
                     toConflictResponse(judgment),
@@ -270,14 +293,14 @@ public class JudgmentService {
 
         if (judgment.getStatus() == JudgmentStatus.FAILED) {
             return new JudgmentDetailResponse(
-                    judgment.getId(), judgment.getStatus(),
+                    judgment.getId(), judgment.getStatus(), null,
                     null, null, null, null, null, null, null, null,
                     judgment.getFailureErrorCode(), resolveErrorMessage(judgment.getFailureErrorCode()),
                     judgment.getInputType(), categoryId, judgment.getCreatedAt());
         }
 
         return new JudgmentDetailResponse(
-                judgment.getId(), judgment.getStatus(),
+                judgment.getId(), judgment.getStatus(), null,
                 null, null, null, null, null, null, null, null,
                 null, null,
                 judgment.getInputType(), categoryId, judgment.getCreatedAt());
@@ -290,6 +313,7 @@ public class JudgmentService {
         return new JudgmentSummaryResponse(
                 judgment.getId(),
                 judgment.getStatus(),
+                completed ? judgment.getTitle() : null,
                 completed ? judgment.getTrustLevel().name() : null,
                 completed ? judgment.getTrustLevel().getLabel() : null,
                 judgment.getInputType(),

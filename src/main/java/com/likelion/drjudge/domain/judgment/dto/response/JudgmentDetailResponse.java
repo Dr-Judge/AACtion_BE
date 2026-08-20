@@ -8,6 +8,7 @@ import java.util.List;
 public record JudgmentDetailResponse(
         Long judgmentId,
         JudgmentStatus status,
+        String title,
         String trustLevel,
         String trustLevelLabel,
         String evidenceSummary,
