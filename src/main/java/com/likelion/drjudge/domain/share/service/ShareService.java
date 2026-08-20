@@ -12,6 +12,7 @@ import com.likelion.drjudge.domain.share.repository.ShareLinkRepository;
 import com.likelion.drjudge.global.exception.BusinessException;
 import java.security.SecureRandom;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,9 @@ public class ShareService {
 
     private final ShareLinkRepository shareLinkRepository;
     private final JudgmentRepository judgmentRepository;
+
+    @Value("${app.frontend-base-url}")
+    private String frontendBaseUrl;
 
     /** POST /judgments/{judgmentId}/share */
     @Transactional
@@ -44,7 +48,7 @@ public class ShareService {
         ShareLink shareLink = ShareLink.create(judgment, judgment.getUser(), token);
         shareLinkRepository.save(shareLink);
 
-        return ShareLinkResponse.of(token);
+        return ShareLinkResponse.of(token, frontendBaseUrl);
     }
 
     /** GET /share/{token} — 비회원도 접근 가능(인증 불필요) */

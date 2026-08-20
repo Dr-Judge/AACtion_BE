@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 public record JudgmentSummaryResponse(
         Long judgmentId,
         JudgmentStatus status,
+        String title,
         String trustLevel,
         String trustLevelLabel,
         InputType inputType,

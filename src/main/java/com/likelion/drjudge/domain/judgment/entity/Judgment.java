@@ -47,6 +47,11 @@ public class Judgment {
     @Column(name = "input_text", columnDefinition = "TEXT")
     private String inputText;
 
+    // 판정 완료 시 AI가 생성하는 의문문 형태 요약 제목 (판정 이력·공유 카드용).
+    // 처리 중/실패 상태거나 옛날 데이터면 null일 수 있다.
+    @Column(name = "title", length = 255)
+    private String title;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     private Category category;
@@ -103,6 +108,7 @@ public class Judgment {
     }
 
     public void complete(
+            String title,
             TrustLevel trustLevel,
             String evidenceSummary,
             boolean conflictDetected,
@@ -114,6 +120,7 @@ public class Judgment {
             ArchiveItem archiveItem
     ) {
         this.status = JudgmentStatus.COMPLETED;
+        this.title = title;
         this.trustLevel = trustLevel;
         this.evidenceSummary = evidenceSummary;
         this.conflictDetected = conflictDetected;

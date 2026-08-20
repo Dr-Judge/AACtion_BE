@@ -19,6 +19,7 @@ import com.likelion.drjudge.domain.judgment.dto.ai.AiJudgmentRequest;
 import com.likelion.drjudge.domain.judgment.dto.ai.AiJudgmentResponse;
 import com.likelion.drjudge.domain.judgment.dto.request.CreateJudgmentRequest;
 import com.likelion.drjudge.domain.judgment.dto.response.CreateJudgmentResponse;
+import com.likelion.drjudge.domain.judgment.dto.response.JudgmentDetailResponse;
 import com.likelion.drjudge.domain.judgment.entity.InputType;
 import com.likelion.drjudge.domain.judgment.entity.Judgment;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentRequestCount;
@@ -189,6 +190,62 @@ class JudgmentServiceTest {
 
         assertEquals(JudgmentStatus.COMPLETED, judgment.getStatus());
         assertEquals(trustLevel, judgment.getTrustLevel());
+        assertEquals("이 주장이 사실일까?", judgment.getTitle());
+    }
+
+    @Test
+    void AI_응답의_title이_비어있으면_FAILED_및_한도환불() {
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+        LocalDate today = LocalDate.now();
+        Judgment judgment = Judgment.create(user, InputType.TEXT, "테스트 주장", null, today);
+        when(judgmentRepository.findById(13L)).thenReturn(Optional.of(judgment));
+
+        AiJudgmentResponse blankTitleResponse = new AiJudgmentResponse(
+                "  ",
+                TrustLevel.PENDING.name(),
+                "근거 요약",
+                new AiJudgmentResponse.ConflictOfInterest(false, null, null),
+                "안전 안내",
+                List.of(),
+                new AiJudgmentResponse.GuideCard("제목", "출처유형", "출처", List.of()));
+        stubAiServiceSuccess(blankTitleResponse);
+
+        JudgmentRequestCount countRow = JudgmentRequestCount.create(1L, today);
+        countRow.increment();
+        when(requestCountRepository.findByUserIdAndRequestDate(1L, today)).thenReturn(Optional.of(countRow));
+
+        judgmentService.processAsync(13L);
+
+        assertEquals(JudgmentStatus.FAILED, judgment.getStatus());
+        assertEquals(0, countRow.getRequestCount());
+    }
+
+    @Test
+    void title이_255코드포인트를_넘으면_서로게이트_쌍을_안_끊고_잘린다() {
+        // 이모지(😀)는 UTF-16에서 서로게이트 쌍(char 2개)이라, char 인덱스로 substring하면
+        // 쌍 중간이 잘려 깨진 문자가 남을 수 있다. 300개를 넣어 255 코드포인트 경계를 넘긴다.
+        String longEmojiTitle = "😀".repeat(300);
+        Judgment judgment = Judgment.create(mock(User.class), InputType.TEXT, "테스트 주장", null, LocalDate.now());
+        when(judgmentRepository.findById(14L)).thenReturn(Optional.of(judgment));
+
+        AiJudgmentResponse response = new AiJudgmentResponse(
+                longEmojiTitle,
+                TrustLevel.PENDING.name(),
+                "근거 요약",
+                new AiJudgmentResponse.ConflictOfInterest(false, null, null),
+                "안전 안내",
+                List.of(),
+                new AiJudgmentResponse.GuideCard("제목", "출처유형", "출처", List.of()));
+        stubAiServiceSuccess(response);
+
+        judgmentService.processAsync(14L);
+
+        assertEquals(JudgmentStatus.COMPLETED, judgment.getStatus());
+        String title = judgment.getTitle();
+        assertEquals(255, title.codePointCount(0, title.length()));
+        // 서로게이트 쌍이 안 끊겼으면 문자열이 완전한 이모지들로만 구성돼 길이가 짝수(char 기준)여야 한다.
+        assertEquals(0, title.length() % 2);
     }
 
     @Test
@@ -250,6 +307,7 @@ class JudgmentServiceTest {
 
     private AiJudgmentResponse aiResponse(String trustLevel) {
         return new AiJudgmentResponse(
+                "이 주장이 사실일까?",
                 trustLevel,
                 "근거 요약",
                 new AiJudgmentResponse.ConflictOfInterest(false, null, null),
@@ -271,6 +329,32 @@ class JudgmentServiceTest {
                 () -> judgmentService.get(2L, 100L));
 
         assertEquals(CommonErrorCode.FORBIDDEN, exception.getErrorCode());
+    }
+
+    @Test
+    void 완료된_판정_조회시_title이_그대로_노출된다() {
+        User owner = mock(User.class);
+        when(owner.getId()).thenReturn(1L);
+        Judgment judgment = Judgment.create(owner, InputType.TEXT, "테스트 주장", null, LocalDate.now());
+        judgment.complete("이 주장이 사실일까?", TrustLevel.PENDING, "근거 요약",
+                false, null, null, null, null, null, null);
+        when(judgmentRepository.findById(20L)).thenReturn(Optional.of(judgment));
+
+        JudgmentDetailResponse response = judgmentService.get(1L, 20L);
+
+        assertEquals("이 주장이 사실일까?", response.title());
+    }
+
+    @Test
+    void 처리중인_판정_조회시_title은_null이다() {
+        User owner = mock(User.class);
+        when(owner.getId()).thenReturn(1L);
+        Judgment judgment = Judgment.create(owner, InputType.TEXT, "테스트 주장", null, LocalDate.now());
+        when(judgmentRepository.findById(21L)).thenReturn(Optional.of(judgment));
+
+        JudgmentDetailResponse response = judgmentService.get(1L, 21L);
+
+        assertEquals(null, response.title());
     }
 
     @Test
