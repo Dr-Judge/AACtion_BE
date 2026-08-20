@@ -200,29 +200,36 @@ public class JudgmentService {
 
     private void checkAndIncrementDailyLimit(Long userId, LocalDate requestDate) {
         Optional<JudgmentRequestCount> existing = requestCountRepository.findByUserIdAndRequestDate(userId, requestDate);
-        JudgmentRequestCount count = existing.orElseGet(() -> JudgmentRequestCount.create(userId, requestDate));
+        int currentCount = existing.map(JudgmentRequestCount::getRequestCount).orElse(0);
 
-        if (count.getRequestCount() >= dailyLimit) {
+        if (currentCount >= dailyLimit) {
             throw new BusinessException(JudgmentErrorCode.DAILY_LIMIT_EXCEEDED);
         }
 
-        count.increment();
-        // existing이면 이미 영속 상태(managed)라 dirty checking으로 flush 시 자동 반영된다.
-        // 새로 만든 경우엔 repository.save()가 아니라 EntityManager.persist()를 직접 쓴다 —
-        // save()는 Persistable.isNew()로 insert/merge를 판단하는데, 이 엔티티(수동 할당
-        // PK + @IdClass) 조합에서 isNew()가 true인데도 실제로는 merge(UPDATE)가 나가
-        // 신규 행 첫 요청마다 StaleObjectStateException이 터지는 문제가 운영에서 재현됐다
-        // (원인 불명 — Spring Data JPA/Hibernate 버전 조합의 문제로 추정). persist()는
-        // JPA 스펙상 무조건 INSERT만 하므로 그 판단 자체가 필요 없어 이 문제를 원천 차단한다.
         if (existing.isEmpty()) {
+            // 새로 만든 엔티티는 EntityManager.persist()로 직접 영속화한다 — JPA 스펙상
+            // persist()는 무조건 INSERT만 하므로 애매할 여지가 없다.
+            JudgmentRequestCount count = JudgmentRequestCount.create(userId, requestDate);
+            count.increment();
             entityManager.persist(count);
+        } else {
+            // 기존 행은 엔티티를 로드해 필드를 바꾸고 dirty checking에 맡기는 대신, 명시적
+            // UPDATE 쿼리로 직접 증가시킨다 — 그 dirty-checking UPDATE가 운영에서
+            // "Unexpected row count (expected 1 but was 0)"로 반복 실패하는 문제가 있었다
+            // (JudgmentRequestCountRepository 주석 참고). PESSIMISTIC_WRITE로 이미 그 행을
+            // 잠근 상태라 여기서 0행이 나오면 그 자체가 이상 상황이라 예외로 드러낸다.
+            int updated = requestCountRepository.incrementCount(userId, requestDate);
+            if (updated != 1) {
+                throw new IllegalStateException(
+                        "일일 한도 카운트 증가에 실패했습니다: userId=" + userId + ", requestDate=" + requestDate);
+            }
         }
     }
 
     private void refundDailyLimit(Long userId, LocalDate requestDate) {
         // 자정 근처 요청은 생성일과 처리일(비동기)이 다를 수 있어, 증가시켰던 그 날짜를 그대로 써야 한다.
-        requestCountRepository.findByUserIdAndRequestDate(userId, requestDate)
-                .ifPresent(JudgmentRequestCount::decrement);
+        // 환불은 실패해도(행이 없는 등) 이미 다른 오류 처리 경로 안이라 예외를 또 던지지 않는다.
+        requestCountRepository.decrementCount(userId, requestDate);
     }
 
     private AiJudgmentResponse callAiService(String text, Long categoryId) {
