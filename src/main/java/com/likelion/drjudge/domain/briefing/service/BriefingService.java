@@ -88,7 +88,7 @@ public class BriefingService {
                 continue;
             }
             String categoryCode = categoryCodesById.get(briefing.getCategoryId());
-            items.add(BriefingItemResponse.from(archiveItem, categoryCode));
+            items.add(BriefingItemResponse.from(briefing.getId(), archiveItem, categoryCode));
         }
 
         return new BriefingResponse(date, items);
