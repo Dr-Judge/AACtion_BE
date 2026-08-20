@@ -58,6 +58,7 @@ POST /internal/api/v1/judgments
 
 ```json
 {
+  "title": "이 영양제를 먹으면 관절통이 완치될까?",
   "trust_level": "COUNTER_EVIDENCE",
   "evidence_summary": "특정 성분이 관절통을 완치시킨다는 임상 근거는 확인되지 않았습니다.",
   "conflict_of_interest": {
@@ -88,6 +89,7 @@ POST /internal/api/v1/judgments
 
 | 필드 | 필수 | null 허용 | 규칙 |
 |---|---|---|---|
+| `title` | ✅ | ❌ | 사용자 주장을 의문문 형태로 요약한 한 줄 제목. 판정 이력·공유 카드에 노출됨 (예: "이 영양제를 먹으면 관절통이 완치될까?") |
 | `trust_level` | ✅ | ❌ | 항상 5종 enum 중 하나 |
 | `evidence_summary` | ✅ | ❌ | 빈 문자열 금지 |
 | `conflict_of_interest.detected` | ✅ | ❌ | - |

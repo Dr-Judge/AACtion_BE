@@ -234,6 +234,7 @@ public class JudgmentService {
         boolean detected = response.conflictOfInterest() != null && response.conflictOfInterest().detected();
 
         judgment.complete(
+                response.title(),
                 TrustLevel.valueOf(response.trustLevel()),
                 response.evidenceSummary(),
                 detected,
@@ -256,7 +257,7 @@ public class JudgmentService {
 
         if (judgment.getStatus() == JudgmentStatus.COMPLETED) {
             return new JudgmentDetailResponse(
-                    judgment.getId(), judgment.getStatus(),
+                    judgment.getId(), judgment.getStatus(), judgment.getTitle(),
                     judgment.getTrustLevel().name(), judgment.getTrustLevel().getLabel(),
                     judgment.getEvidenceSummary(),
                     toConflictResponse(judgment),
@@ -270,14 +271,14 @@ public class JudgmentService {
 
         if (judgment.getStatus() == JudgmentStatus.FAILED) {
             return new JudgmentDetailResponse(
-                    judgment.getId(), judgment.getStatus(),
+                    judgment.getId(), judgment.getStatus(), null,
                     null, null, null, null, null, null, null, null,
                     judgment.getFailureErrorCode(), resolveErrorMessage(judgment.getFailureErrorCode()),
                     judgment.getInputType(), categoryId, judgment.getCreatedAt());
         }
 
         return new JudgmentDetailResponse(
-                judgment.getId(), judgment.getStatus(),
+                judgment.getId(), judgment.getStatus(), null,
                 null, null, null, null, null, null, null, null,
                 null, null,
                 judgment.getInputType(), categoryId, judgment.getCreatedAt());
@@ -290,6 +291,7 @@ public class JudgmentService {
         return new JudgmentSummaryResponse(
                 judgment.getId(),
                 judgment.getStatus(),
+                completed ? judgment.getTitle() : null,
                 completed ? judgment.getTrustLevel().name() : null,
                 completed ? judgment.getTrustLevel().getLabel() : null,
                 judgment.getInputType(),

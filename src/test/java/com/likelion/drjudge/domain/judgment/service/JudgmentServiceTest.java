@@ -250,6 +250,7 @@ class JudgmentServiceTest {
 
     private AiJudgmentResponse aiResponse(String trustLevel) {
         return new AiJudgmentResponse(
+                "이 주장이 사실일까?",
                 trustLevel,
                 "근거 요약",
                 new AiJudgmentResponse.ConflictOfInterest(false, null, null),
