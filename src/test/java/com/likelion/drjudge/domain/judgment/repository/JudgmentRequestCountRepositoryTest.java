@@ -3,6 +3,7 @@ package com.likelion.drjudge.domain.judgment.repository;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.likelion.drjudge.domain.judgment.entity.JudgmentRequestCount;
+import com.likelion.drjudge.domain.judgment.entity.JudgmentRequestCountId;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -57,8 +58,13 @@ class JudgmentRequestCountRepositoryTest {
         entityManager.flush();
         entityManager.clear();
 
+        // 검증 대상은 Persistable.isNew() 판단(merge vs persist)이지 락 자체가 아니라서,
+        // findByUserIdAndRequestDate의 PESSIMISTIC_WRITE 락은 일부러 안 거친다 — 이 조합
+        // (락 걸린 조회로 로드한 엔티티를 곧바로 mutate+flush)이 CI(H2 on Linux)에서만
+        // StaleObjectStateException으로 간헐적으로 실패해서, 원인이 다른 쪽(락)인지
+        // 여기(Persistable)인지 구분하기 위해 분리했다.
         JudgmentRequestCount loaded =
-                repository.findByUserIdAndRequestDate(2L, LocalDate.now()).orElseThrow();
+                entityManager.find(JudgmentRequestCount.class, new JudgmentRequestCountId(2L, LocalDate.now()));
         loaded.increment();
         // loaded는 이미 영속 상태(managed)라 dirty checking으로 flush 시 자동 반영된다 —
         // 여기서 save()를 또 호출하면 merge()를 불필요하게 다시 타게 된다.
