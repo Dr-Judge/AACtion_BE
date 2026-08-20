@@ -4,7 +4,7 @@ public record ShareLinkResponse(
         String shareToken,
         String shareUrl
 ) {
-    public static ShareLinkResponse of(String token) {
-        return new ShareLinkResponse(token, "https://doctorjudge.app/share/" + token);
+    public static ShareLinkResponse of(String token, String frontendBaseUrl) {
+        return new ShareLinkResponse(token, frontendBaseUrl + "/share/" + token);
     }
 }
