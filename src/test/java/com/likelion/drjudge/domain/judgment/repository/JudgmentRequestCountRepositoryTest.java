@@ -12,20 +12,14 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 /**
  * JudgmentRequestCount는 @Id를 자동증가가 아니라 (userId, requestDate)로 직접 할당한다.
- * 예전엔 Persistable을 구현해 새 엔티티/기존 엔티티를 repository.save()가 스스로 판단하게
- * 했으나, 운영에서 신규 행 첫 요청마다 StaleObjectStateException(merge가 UPDATE 0행)이
- * 계속 재현됐다 — Persistable.isNew()가 true를 반환하는데도 실제로는 merge()가 나가는
- * 것까지 로그로 확인했지만 정확한 원인은 못 좁혔다. 그래서 그 판단 자체를 없앴다:
- * 새 행이라고 이미 알고 있는 경우(findByUserIdAndRequestDate가 empty)엔
- * EntityManager.persist()를 직접 호출한다(JPA persist()는 항상 INSERT만 함, merge() 여지가
- * 없음).
  *
- * "기존 행을 로드해서 수정 후 flush"하는 케이스도 다시 테스트로 넣어봤으나, save()/isNew()가
- * 전혀 안 끼는 순수 "조회 → increment → flush"임에도 CI(H2 on Linux)에서만
- * StaleObjectStateException이 또 재현되고 로컬에서는 여전히 재현이 안 됐다 — 이번 재현으로
- * Persistable/isNew 판단과는 무관한, CI 환경(H2 PESSIMISTIC_WRITE 락 처리 등) 자체의
- * 문제라는 게 더 명확해졌다. 프로덕션은 MySQL이라 이 케이스에 해당하지 않으므로, 이전과
- * 같은 이유로 이 테스트는 다시 뺀다.
+ * 예전엔 "엔티티를 로드해 필드를 바꾸고 Hibernate의 dirty checking에 맡기는" 방식으로 기존
+ * 행을 증가시켰는데, 이게 CI(H2)뿐 아니라 실제 운영(MySQL)에서도
+ * "Unexpected row count (expected row count 1 but was 0)"로 반복 실패했다 — Persistable
+ * 구현, isNew() 판단, save() 호출 여부와 전부 무관하게 재현됐다(정확한 원인은 못 좁혔다).
+ * 그래서 dirty checking에 기대는 방식 자체를 없애고, 신규 행은 EntityManager.persist()로,
+ * 기존 행 증가/감소는 JudgmentRequestCountRepository의 명시적 UPDATE 쿼리
+ * (incrementCount/decrementCount)로 처리한다.
  */
 @DataJpaTest
 class JudgmentRequestCountRepositoryTest {
@@ -48,5 +42,44 @@ class JudgmentRequestCountRepositoryTest {
         Optional<JudgmentRequestCount> found =
                 repository.findByUserIdAndRequestDate(1L, LocalDate.now());
         assertEquals(1, found.orElseThrow().getRequestCount());
+    }
+
+    @Test
+    void 기존_행을_incrementCount로_증가시키면_1행_반영되고_저장된다() {
+        JudgmentRequestCount count = JudgmentRequestCount.create(2L, LocalDate.now());
+        entityManager.persist(count);
+        entityManager.flush();
+        entityManager.clear();
+
+        int updated = repository.incrementCount(2L, LocalDate.now());
+        entityManager.clear();
+
+        assertEquals(1, updated);
+        Optional<JudgmentRequestCount> found =
+                repository.findByUserIdAndRequestDate(2L, LocalDate.now());
+        assertEquals(1, found.orElseThrow().getRequestCount());
+    }
+
+    @Test
+    void 존재하지_않는_행에_incrementCount를_호출하면_0행_반영된다() {
+        int updated = repository.incrementCount(999L, LocalDate.now());
+
+        assertEquals(0, updated);
+    }
+
+    @Test
+    void decrementCount는_0_밑으로_내려가지_않는다() {
+        JudgmentRequestCount count = JudgmentRequestCount.create(3L, LocalDate.now());
+        entityManager.persist(count);
+        entityManager.flush();
+        entityManager.clear();
+
+        int updated = repository.decrementCount(3L, LocalDate.now());
+        entityManager.clear();
+
+        assertEquals(0, updated); // requestCount가 이미 0이라 WHERE requestCount > 0에 안 걸림
+        Optional<JudgmentRequestCount> found =
+                repository.findByUserIdAndRequestDate(3L, LocalDate.now());
+        assertEquals(0, found.orElseThrow().getRequestCount());
     }
 }

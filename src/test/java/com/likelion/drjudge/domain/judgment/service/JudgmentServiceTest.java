@@ -124,6 +124,44 @@ class JudgmentServiceTest {
     }
 
     @Test
+    void 오늘_카운트_행이_이미_있으면_명시적_UPDATE로_증가시킨다() {
+        User user = mock(User.class);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        JudgmentRequestCount existing = JudgmentRequestCount.create(1L, LocalDate.now());
+        existing.increment(); // 오늘 이미 1번 요청함
+        when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
+                .thenReturn(Optional.of(existing));
+        when(requestCountRepository.incrementCount(eq(1L), any(LocalDate.class))).thenReturn(1);
+        when(judgmentRepository.save(any(Judgment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreateJudgmentRequest request = new CreateJudgmentRequest(InputType.TEXT, "테스트 주장", null, null, null);
+
+        CreateJudgmentResponse response = judgmentService.create(1L, request);
+
+        assertEquals(JudgmentStatus.PROCESSING, response.status());
+        verify(requestCountRepository).incrementCount(eq(1L), any(LocalDate.class));
+        verify(entityManager, never()).persist(any());
+    }
+
+    @Test
+    void 기존_카운트_증가_UPDATE가_0행이면_이상상황으로_예외를_던진다() {
+        User user = mock(User.class);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        JudgmentRequestCount existing = JudgmentRequestCount.create(1L, LocalDate.now());
+        when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
+                .thenReturn(Optional.of(existing));
+        // PESSIMISTIC_WRITE로 잠근 행인데 UPDATE가 0행이면 정상 상황이 아니다.
+        when(requestCountRepository.incrementCount(eq(1L), any(LocalDate.class))).thenReturn(0);
+
+        CreateJudgmentRequest request = new CreateJudgmentRequest(InputType.TEXT, "테스트 주장", null, null, null);
+
+        assertThrows(IllegalStateException.class, () -> judgmentService.create(1L, request));
+        verify(judgmentRepository, never()).save(any());
+    }
+
+    @Test
     void 일일_한도를_이미_채웠으면_DAILY_LIMIT_EXCEEDED() {
         User user = mock(User.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
@@ -216,14 +254,10 @@ class JudgmentServiceTest {
                 new AiJudgmentResponse.GuideCard("제목", "출처유형", "출처", List.of()));
         stubAiServiceSuccess(blankTitleResponse);
 
-        JudgmentRequestCount countRow = JudgmentRequestCount.create(1L, today);
-        countRow.increment();
-        when(requestCountRepository.findByUserIdAndRequestDate(1L, today)).thenReturn(Optional.of(countRow));
-
         judgmentService.processAsync(13L);
 
         assertEquals(JudgmentStatus.FAILED, judgment.getStatus());
-        assertEquals(0, countRow.getRequestCount());
+        verify(requestCountRepository).decrementCount(1L, today);
     }
 
     @Test
@@ -286,15 +320,12 @@ class JudgmentServiceTest {
         when(bodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(AiJudgmentResponse.class)).thenThrow(aiServiceFailure);
 
-        JudgmentRequestCount countRow = JudgmentRequestCount.create(1L, today);
-        countRow.increment();
-        when(requestCountRepository.findByUserIdAndRequestDate(1L, today)).thenReturn(Optional.of(countRow));
-
         judgmentService.processAsync(12L);
 
         assertEquals(JudgmentStatus.FAILED, judgment.getStatus());
         assertEquals(JudgmentErrorCode.AI_SERVICE_UNAVAILABLE.getCode(), judgment.getFailureErrorCode());
-        assertEquals(0, countRow.getRequestCount());
+        // 환불은 예약 때 실제로 썼던 날짜(today) 기준이어야 한다 — createdAt(nextDay) 아님.
+        verify(requestCountRepository).decrementCount(1L, today);
         // 5xx/timeout은 1회만 재시도하므로 총 2번 호출된다.
         verify(responseSpec, times(2)).body(AiJudgmentResponse.class);
     }
