@@ -41,7 +41,9 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "https://drjudge.netlify.app",
-            "https://dr-judge.netlify.app
+            "https://dr-judge.netlify.app",
+            "https://aactionn.netlify.app"
+            
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of(
