@@ -116,4 +116,11 @@ public class User {
     public void withdraw() {
         this.status = UserStatus.WITHDRAWN;
     }
+
+    public void increasePoint(int amount) {
+        if (amount <= 0) {
+             throw new IllegalArgumentException("amount must be positive");
+        }
+        this.pointBalance += amount;
+    }
 }

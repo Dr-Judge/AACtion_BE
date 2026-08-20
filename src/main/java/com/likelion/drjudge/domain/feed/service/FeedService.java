@@ -79,9 +79,14 @@ public class FeedService {
         if (judgment.getStatus() != JudgmentStatus.COMPLETED) {
             throw new BusinessException(FeedErrorCode.JUDGMENT_NOT_COMPLETED);
         }
+        if (feedPostRepository.existsByJudgmentId(judgment.getId())) {
+            throw new BusinessException(FeedErrorCode.ALREADY_POSTED);
+        }
 
         FeedPost feedPost = FeedPost.create(judgment, judgment.getUser());
         feedPostRepository.save(feedPost);
+
+        judgment.getUser().increasePoint(20);
 
         entityManager.flush();
         entityManager.refresh(feedPost);
