@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +26,19 @@ public class FeedController {
 
     private final FeedService feedService;
 
-    @Operation(summary = "내가 올린 공유 카드 목록 조회", description = "로그인한 사용자가 공유 피드에 게시한 판정 카드 목록을 최신순으로 조회한다. page/size 기반 더보기 페이지네이션(hasNext)을 사용한다.")
+    @Operation(summary = "공유 피드 전체 목록 조회", description = "공개된 공유 카드 전체 목록을 조회한다. sort=recent(기본, 최신순)|popular(좋아요순).")
+    @GetMapping
+    public ResponseEntity<ApiResponse<FeedPostPageResponse>> getFeedPosts(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @RequestParam(defaultValue = "recent") @Pattern(regexp = "recent|popular") String sort,
+            @RequestParam(defaultValue = "1") @Min(1) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+    ) {
+        FeedPostPageResponse response = feedService.getFeedPosts(principal.getId(), sort, page, size);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "내가 올린 공유 카드 목록 조회", description = "로그인한 사용자가 공유 피드에 게시한 판정 카드 목록을 최신순으로 조회한다.")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<FeedPostPageResponse>> getMyFeedPosts(
             @AuthenticationPrincipal CustomUserPrincipal principal,

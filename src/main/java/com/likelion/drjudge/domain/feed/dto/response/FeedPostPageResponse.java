@@ -4,6 +4,7 @@ import java.util.List;
 
 public record FeedPostPageResponse(
         List<FeedPostResponse> items,
-        boolean hasNext
+        int page,
+        int totalPages
 ) {
 }

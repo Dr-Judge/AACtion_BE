@@ -33,6 +33,7 @@ import com.likelion.drjudge.global.exception.CommonErrorCode;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -196,15 +197,20 @@ public class JudgmentService {
     }
 
     private void checkAndIncrementDailyLimit(Long userId, LocalDate requestDate) {
-        JudgmentRequestCount count = requestCountRepository.findByUserIdAndRequestDate(userId, requestDate)
-                .orElseGet(() -> JudgmentRequestCount.create(userId, requestDate));
+        Optional<JudgmentRequestCount> existing = requestCountRepository.findByUserIdAndRequestDate(userId, requestDate);
+        JudgmentRequestCount count = existing.orElseGet(() -> JudgmentRequestCount.create(userId, requestDate));
 
         if (count.getRequestCount() >= dailyLimit) {
             throw new BusinessException(JudgmentErrorCode.DAILY_LIMIT_EXCEEDED);
         }
 
         count.increment();
-        requestCountRepository.save(count);
+        // existing이면 이미 영속 상태(managed)라 dirty checking으로 flush 시 자동 반영된다
+        // (refundDailyLimit과 동일한 패턴). 새로 만든 경우에만 명시적으로 영속화한다 —
+        // 이미 관리 중인 엔티티에 save()를 또 호출하면 불필요하게 merge()를 타게 된다.
+        if (existing.isEmpty()) {
+            requestCountRepository.save(count);
+        }
     }
 
     private void refundDailyLimit(Long userId, LocalDate requestDate) {
