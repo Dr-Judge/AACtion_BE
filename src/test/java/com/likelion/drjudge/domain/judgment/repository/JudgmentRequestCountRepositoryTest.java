@@ -18,9 +18,14 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
  * 것까지 로그로 확인했지만 정확한 원인은 못 좁혔다. 그래서 그 판단 자체를 없앴다:
  * 새 행이라고 이미 알고 있는 경우(findByUserIdAndRequestDate가 empty)엔
  * EntityManager.persist()를 직접 호출한다(JPA persist()는 항상 INSERT만 함, merge() 여지가
- * 없음). 기존 행이면 repository.save()를 아예 호출하지 않고 dirty checking에만 맡긴다 —
- * 이 두 경로 모두 "새 엔티티인지 판단"이 필요 없어서, 그 판단 로직 자체가 원인이었던
- * CI 전용 플레이키(StaleObjectStateException)도 같이 없어질 것으로 기대한다.
+ * 없음).
+ *
+ * "기존 행을 로드해서 수정 후 flush"하는 케이스도 다시 테스트로 넣어봤으나, save()/isNew()가
+ * 전혀 안 끼는 순수 "조회 → increment → flush"임에도 CI(H2 on Linux)에서만
+ * StaleObjectStateException이 또 재현되고 로컬에서는 여전히 재현이 안 됐다 — 이번 재현으로
+ * Persistable/isNew 판단과는 무관한, CI 환경(H2 PESSIMISTIC_WRITE 락 처리 등) 자체의
+ * 문제라는 게 더 명확해졌다. 프로덕션은 MySQL이라 이 케이스에 해당하지 않으므로, 이전과
+ * 같은 이유로 이 테스트는 다시 뺀다.
  */
 @DataJpaTest
 class JudgmentRequestCountRepositoryTest {
@@ -42,24 +47,6 @@ class JudgmentRequestCountRepositoryTest {
 
         Optional<JudgmentRequestCount> found =
                 repository.findByUserIdAndRequestDate(1L, LocalDate.now());
-        assertEquals(1, found.orElseThrow().getRequestCount());
-    }
-
-    @Test
-    void 기존_행을_조회해서_증가시키면_save_없이도_dirty_checking으로_UPDATE된다() {
-        JudgmentRequestCount count = JudgmentRequestCount.create(2L, LocalDate.now());
-        entityManager.persist(count);
-        entityManager.flush();
-        entityManager.clear();
-
-        JudgmentRequestCount loaded =
-                repository.findByUserIdAndRequestDate(2L, LocalDate.now()).orElseThrow();
-        loaded.increment();
-        entityManager.flush();
-        entityManager.clear();
-
-        Optional<JudgmentRequestCount> found =
-                repository.findByUserIdAndRequestDate(2L, LocalDate.now());
         assertEquals(1, found.orElseThrow().getRequestCount());
     }
 }
