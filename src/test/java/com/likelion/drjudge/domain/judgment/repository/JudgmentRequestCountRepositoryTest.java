@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.test.context.TestPropertySource;
 
 /**
  * JudgmentRequestCount는 @Id를 자동증가가 아니라 (userId, requestDate)로 직접 할당한다.
@@ -16,8 +17,17 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
  * 착각해 INSERT 대신 UPDATE(merge)를 시도하고, 그 행이 실제로 없으면
  * StaleObjectStateException으로 터진다 — 실제 flush까지 타야 재현/검증되는 버그라
  * Mockito 단위 테스트로는 못 잡는다. @DataJpaTest로 진짜 저장 경로를 확인한다.
+ *
+ * 전용 H2 인메모리 DB 이름을 쓴다 — application.yaml의 공용 이름(jdbc:h2:mem:drjudge)을
+ * 그대로 쓰면, @DataJpaTest가 다른 슬라이스(@SpringBootTest 등)와 별개의
+ * ApplicationContext를 새로 만들면서 ddl-auto=create-drop이 같은 이름의 인메모리 DB에
+ * 다시 DROP+CREATE를 실행해, 이 테스트가 flush 시점에 "테이블이 사라진" 것처럼 보이는
+ * StaleObjectStateException을 CI에서 간헐적으로 겪었다(로컬에서는 재현 안 됨).
  */
 @DataJpaTest
+@TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:judgment_request_count_test;MODE=MySQL;DB_CLOSE_DELAY=-1"
+})
 class JudgmentRequestCountRepositoryTest {
 
     @Autowired
