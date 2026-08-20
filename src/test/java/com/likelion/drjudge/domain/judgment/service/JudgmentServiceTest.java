@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
 import com.likelion.drjudge.domain.category.repository.CategoryRepository;
 import com.likelion.drjudge.domain.judgment.dto.ai.AiJudgmentRequest;
 import com.likelion.drjudge.domain.judgment.dto.ai.AiJudgmentResponse;
@@ -77,6 +78,8 @@ class JudgmentServiceTest {
     private YoutubeClient youtubeClient;
     @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private EntityManager entityManager;
 
     @InjectMocks
     private JudgmentService judgmentService;
@@ -101,6 +104,8 @@ class JudgmentServiceTest {
 
     @Test
     void 판정_생성에_성공하면_PROCESSING_상태를_반환하고_일일카운트를_증가시킨다() {
+        // 그 유저의 그날 첫 요청(카운트 행이 아직 없는 상태) — 운영에서 실제로 500이
+        // 재현됐던 바로 그 경로라 명시적으로 검증한다.
         User user = mock(User.class);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(requestCountRepository.findByUserIdAndRequestDate(eq(1L), any(LocalDate.class)))
@@ -114,7 +119,7 @@ class JudgmentServiceTest {
         assertEquals(JudgmentStatus.PROCESSING, response.status());
 
         ArgumentCaptor<JudgmentRequestCount> captor = ArgumentCaptor.forClass(JudgmentRequestCount.class);
-        verify(requestCountRepository).save(captor.capture());
+        verify(entityManager).persist(captor.capture());
         assertEquals(1, captor.getValue().getRequestCount());
     }
 

@@ -30,6 +30,7 @@ import com.likelion.drjudge.domain.user.repository.UserRepository;
 import com.likelion.drjudge.global.constant.TrustLevel;
 import com.likelion.drjudge.global.exception.BusinessException;
 import com.likelion.drjudge.global.exception.CommonErrorCode;
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
@@ -66,6 +67,7 @@ public class JudgmentService {
     private final ClovaOcrClient clovaOcrClient;
     private final YoutubeClient youtubeClient;
     private final TransactionTemplate transactionTemplate;
+    private final EntityManager entityManager;
 
     @Value("${app.judgment.daily-limit:5}")
     private int dailyLimit;
@@ -205,11 +207,15 @@ public class JudgmentService {
         }
 
         count.increment();
-        // existing이면 이미 영속 상태(managed)라 dirty checking으로 flush 시 자동 반영된다
-        // (refundDailyLimit과 동일한 패턴). 새로 만든 경우에만 명시적으로 영속화한다 —
-        // 이미 관리 중인 엔티티에 save()를 또 호출하면 불필요하게 merge()를 타게 된다.
+        // existing이면 이미 영속 상태(managed)라 dirty checking으로 flush 시 자동 반영된다.
+        // 새로 만든 경우엔 repository.save()가 아니라 EntityManager.persist()를 직접 쓴다 —
+        // save()는 Persistable.isNew()로 insert/merge를 판단하는데, 이 엔티티(수동 할당
+        // PK + @IdClass) 조합에서 isNew()가 true인데도 실제로는 merge(UPDATE)가 나가
+        // 신규 행 첫 요청마다 StaleObjectStateException이 터지는 문제가 운영에서 재현됐다
+        // (원인 불명 — Spring Data JPA/Hibernate 버전 조합의 문제로 추정). persist()는
+        // JPA 스펙상 무조건 INSERT만 하므로 그 판단 자체가 필요 없어 이 문제를 원천 차단한다.
         if (existing.isEmpty()) {
-            requestCountRepository.save(count);
+            entityManager.persist(count);
         }
     }
 

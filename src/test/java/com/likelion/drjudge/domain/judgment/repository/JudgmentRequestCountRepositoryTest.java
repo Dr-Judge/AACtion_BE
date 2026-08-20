@@ -12,16 +12,20 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 /**
  * JudgmentRequestCount는 @Id를 자동증가가 아니라 (userId, requestDate)로 직접 할당한다.
- * Persistable을 구현하지 않으면 Spring Data JPA가 새로 만든 엔티티도 이미 존재한다고
- * 착각해 INSERT 대신 UPDATE(merge)를 시도하고, 그 행이 실제로 없으면
- * StaleObjectStateException으로 터진다 — 실제 flush까지 타야 재현/검증되는 버그라
- * Mockito 단위 테스트로는 못 잡는다. @DataJpaTest로 진짜 저장(INSERT) 경로를 확인한다.
+ * 예전엔 Persistable을 구현해 새 엔티티/기존 엔티티를 repository.save()가 스스로 판단하게
+ * 했으나, 운영에서 신규 행 첫 요청마다 StaleObjectStateException(merge가 UPDATE 0행)이
+ * 계속 재현됐다 — Persistable.isNew()가 true를 반환하는데도 실제로는 merge()가 나가는
+ * 것까지 로그로 확인했지만 정확한 원인은 못 좁혔다. 그래서 그 판단 자체를 없앴다:
+ * 새 행이라고 이미 알고 있는 경우(findByUserIdAndRequestDate가 empty)엔
+ * EntityManager.persist()를 직접 호출한다(JPA persist()는 항상 INSERT만 함, merge() 여지가
+ * 없음).
  *
- * "기존 행을 로드해서 수정 후 flush"하는 케이스도 테스트로 넣어봤으나, CI(H2 on Linux)에서만
- * StaleObjectStateException이 재현되고 로컬에서는 전혀 재현이 안 됐다 — 락 유무, 전용 DB
- * 격리, 명시적 save() 제거 등 여러 시도를 했지만 원인을 확정하지 못해 그 케이스는 뺐다.
- * (실제 운영에서도 이 경로 자체는 여러 번 정상 동작이 확인됐다 — 이 테스트 파일 도입 계기가
- * 됐던 운영 장애는 이후 재현되지 않았고, 원인은 재배포 직후의 커넥션 풀 문제였을 가능성이 높다.)
+ * "기존 행을 로드해서 수정 후 flush"하는 케이스도 다시 테스트로 넣어봤으나, save()/isNew()가
+ * 전혀 안 끼는 순수 "조회 → increment → flush"임에도 CI(H2 on Linux)에서만
+ * StaleObjectStateException이 또 재현되고 로컬에서는 여전히 재현이 안 됐다 — 이번 재현으로
+ * Persistable/isNew 판단과는 무관한, CI 환경(H2 PESSIMISTIC_WRITE 락 처리 등) 자체의
+ * 문제라는 게 더 명확해졌다. 프로덕션은 MySQL이라 이 케이스에 해당하지 않으므로, 이전과
+ * 같은 이유로 이 테스트는 다시 뺀다.
  */
 @DataJpaTest
 class JudgmentRequestCountRepositoryTest {
@@ -33,11 +37,11 @@ class JudgmentRequestCountRepositoryTest {
     private EntityManager entityManager;
 
     @Test
-    void 새로_생성한_카운트를_저장하면_INSERT되고_예외가_안_난다() {
+    void 새로_만든_카운트를_persist하면_INSERT되고_예외가_안_난다() {
         JudgmentRequestCount count = JudgmentRequestCount.create(1L, LocalDate.now());
         count.increment();
 
-        repository.save(count);
+        entityManager.persist(count);
         entityManager.flush();
         entityManager.clear();
 
