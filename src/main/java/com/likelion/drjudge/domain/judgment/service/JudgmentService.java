@@ -53,6 +53,7 @@ import org.springframework.web.client.RestClient;
 public class JudgmentService {
 
     private static final int MAX_PAGE_SIZE = 50;
+    private static final int MAX_TITLE_LENGTH = 255; // judgments.title VARCHAR(255)
     private static final String AI_SERVICE_ENDPOINT = "/internal/api/v1/judgments";
 
     private final JudgmentRepository judgmentRepository;
@@ -234,7 +235,7 @@ public class JudgmentService {
         boolean detected = response.conflictOfInterest() != null && response.conflictOfInterest().detected();
 
         judgment.complete(
-                response.title(),
+                validateTitle(response.title()),
                 TrustLevel.valueOf(response.trustLevel()),
                 response.evidenceSummary(),
                 detected,
@@ -245,6 +246,20 @@ public class JudgmentService {
                 writeJson(response.guideCard()),
                 null // TODO: Python이 판정 근거로 쓴 archive_item을 아직 안 돌려줌
         );
+    }
+
+    /**
+     * 계약상 title은 필수·non-blank지만 Jackson 역직렬화만으로는 강제되지 않는다.
+     * 비어있으면 AI 응답 자체를 신뢰할 수 없다고 보고 실패 처리한다(호출부의 catch에서
+     * failJudgment로 이어져 FAILED 처리 + 일일 한도 환불까지 됨). 길이 초과는 컬럼
+     * 제약(VARCHAR(255)) 위반으로 커밋이 깨지는 걸 막기 위해 잘라내되, 판정 자체는
+     * 그대로 완료시킨다 — 제목은 부가 정보라 이것 때문에 전체 판정을 실패시킬 정도는 아니다.
+     */
+    private String validateTitle(String title) {
+        if (title == null || title.isBlank()) {
+            throw new IllegalStateException("AI 응답의 title이 비어있습니다.");
+        }
+        return title.length() > MAX_TITLE_LENGTH ? title.substring(0, MAX_TITLE_LENGTH) : title;
     }
 
     private void failJudgment(Judgment judgment, String errorCode) {
