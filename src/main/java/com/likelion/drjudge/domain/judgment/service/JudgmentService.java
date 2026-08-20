@@ -259,7 +259,14 @@ public class JudgmentService {
         if (title == null || title.isBlank()) {
             throw new IllegalStateException("AI 응답의 title이 비어있습니다.");
         }
-        return title.length() > MAX_TITLE_LENGTH ? title.substring(0, MAX_TITLE_LENGTH) : title;
+        // substring(0, n)은 UTF-16 코드 유닛 기준이라 서로게이트 쌍(이모지 등) 중간을
+        // 잘라 깨진 문자를 남길 수 있다. MySQL VARCHAR(255)도 코드 포인트 기준으로 길이를
+        // 세므로 codePointCount/offsetByCodePoints로 맞춰 자른다.
+        if (title.codePointCount(0, title.length()) <= MAX_TITLE_LENGTH) {
+            return title;
+        }
+        int cutIndex = title.offsetByCodePoints(0, MAX_TITLE_LENGTH);
+        return title.substring(0, cutIndex);
     }
 
     private void failJudgment(Judgment judgment, String errorCode) {

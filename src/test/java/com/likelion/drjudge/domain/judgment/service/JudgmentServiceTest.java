@@ -222,6 +222,33 @@ class JudgmentServiceTest {
     }
 
     @Test
+    void title이_255코드포인트를_넘으면_서로게이트_쌍을_안_끊고_잘린다() {
+        // 이모지(😀)는 UTF-16에서 서로게이트 쌍(char 2개)이라, char 인덱스로 substring하면
+        // 쌍 중간이 잘려 깨진 문자가 남을 수 있다. 300개를 넣어 255 코드포인트 경계를 넘긴다.
+        String longEmojiTitle = "😀".repeat(300);
+        Judgment judgment = Judgment.create(mock(User.class), InputType.TEXT, "테스트 주장", null, LocalDate.now());
+        when(judgmentRepository.findById(14L)).thenReturn(Optional.of(judgment));
+
+        AiJudgmentResponse response = new AiJudgmentResponse(
+                longEmojiTitle,
+                TrustLevel.PENDING.name(),
+                "근거 요약",
+                new AiJudgmentResponse.ConflictOfInterest(false, null, null),
+                "안전 안내",
+                List.of(),
+                new AiJudgmentResponse.GuideCard("제목", "출처유형", "출처", List.of()));
+        stubAiServiceSuccess(response);
+
+        judgmentService.processAsync(14L);
+
+        assertEquals(JudgmentStatus.COMPLETED, judgment.getStatus());
+        String title = judgment.getTitle();
+        assertEquals(255, title.codePointCount(0, title.length()));
+        // 서로게이트 쌍이 안 끊겼으면 문자열이 완전한 이모지들로만 구성돼 길이가 짝수(char 기준)여야 한다.
+        assertEquals(0, title.length() % 2);
+    }
+
+    @Test
     void AI_서비스가_5xx를_반환하면_1회_재시도하고_그래도_실패하면_FAILED_및_한도환불() {
         assertRetriesOnceThenFails(HttpServerErrorException.create(
                 HttpStatusCode.valueOf(503), "Service Unavailable", null, null, null));
