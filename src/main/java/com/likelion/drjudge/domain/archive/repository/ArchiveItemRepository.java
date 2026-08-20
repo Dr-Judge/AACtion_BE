@@ -17,4 +17,6 @@ public interface ArchiveItemRepository extends Repository<ArchiveItem, Long> {
     Optional<ArchiveItem> findById(Long id);
 
     List<ArchiveItem> findAllById(Iterable<Long> ids);
+
+    List<ArchiveItem> findByCategoryId(Long categoryId);
 }
