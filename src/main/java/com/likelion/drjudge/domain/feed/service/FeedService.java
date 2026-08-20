@@ -10,6 +10,8 @@ import com.likelion.drjudge.domain.feed.exception.FeedErrorCode;
 import com.likelion.drjudge.domain.feed.repository.FeedLikeRepository;
 import com.likelion.drjudge.domain.feed.repository.FeedPostRepository;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.likelion.drjudge.domain.judgment.entity.Judgment;
 import com.likelion.drjudge.domain.judgment.entity.JudgmentStatus;
@@ -18,8 +20,8 @@ import com.likelion.drjudge.domain.judgment.repository.JudgmentRepository;
 import com.likelion.drjudge.global.exception.BusinessException;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,23 +35,37 @@ public class FeedService {
     private final FeedLikeRepository feedLikeRepository;
     private final EntityManager entityManager;
 
+    /** GET /feed/posts — sort=recent(기본)|popular */
+    public FeedPostPageResponse getFeedPosts(Long userId, String sort, int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page - 1, size);
+
+        Page<FeedPost> result = "popular".equals(sort)
+                ? feedPostRepository.findByIsPublicTrueOrderByLikeCountDescIdDesc(pageRequest)
+                : feedPostRepository.findByIsPublicTrueOrderByCreatedAtDescIdDesc(pageRequest);
+
+        return toPageResponse(result, userId);
+    }
+
     /** GET /feed/posts/me */
     public FeedPostPageResponse getMyFeedPosts(Long userId, int page, int size) {
-        PageRequest pageRequest = PageRequest.of(
-                page - 1, size + 1,
-                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))
-        );
+        PageRequest pageRequest = PageRequest.of(page - 1, size);
 
-        List<FeedPost> rows = feedPostRepository.findByUserIdOrderByCreatedAtDesc(userId, pageRequest);
+        Page<FeedPost> result = feedPostRepository.findByUserIdOrderByCreatedAtDescIdDesc(userId, pageRequest);
 
-        boolean hasNext = rows.size() > size;
-        List<FeedPost> pageRows = hasNext ? rows.subList(0, size) : rows;
+        return toPageResponse(result, userId);
+    }
 
-        List<FeedPostResponse> items = pageRows.stream()
-                .map(FeedPostResponse::from)
+    private FeedPostPageResponse toPageResponse(Page<FeedPost> result, Long viewerId) {
+        List<Long> postIds = result.getContent().stream().map(FeedPost::getId).toList();
+        Set<Long> likedPostIds = feedLikeRepository.findByIdUserIdAndIdFeedPostIdIn(viewerId, postIds).stream()
+                .map(like -> like.getId().getFeedPostId())
+                .collect(Collectors.toSet());
+
+        List<FeedPostResponse> items = result.getContent().stream()
+                .map(post -> FeedPostResponse.from(post, likedPostIds.contains(post.getId())))
                 .toList();
 
-        return new FeedPostPageResponse(items, hasNext);
+        return new FeedPostPageResponse(items, result.getNumber() + 1, Math.max(result.getTotalPages(), 1));
     }
 
     @Transactional
@@ -70,7 +86,7 @@ public class FeedService {
         entityManager.flush();
         entityManager.refresh(feedPost);
 
-        return FeedPostResponse.from(feedPost);
+        return FeedPostResponse.from(feedPost, false);
     }
 
     @Transactional
