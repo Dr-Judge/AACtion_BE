@@ -3,6 +3,7 @@ package com.likelion.drjudge.domain.judgment.extraction;
 import com.likelion.drjudge.domain.judgment.exception.JudgmentErrorCode;
 import com.likelion.drjudge.global.exception.BusinessException;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,6 +34,14 @@ public class ClovaOcrClient {
             "png", "png",
             "tiff", "tiff"
     );
+    // data URI 접두사가 없는 순수 base64가 왔을 때, 디코딩한 실제 바이트의 매직 넘버로
+    // 포맷을 추정한다 — 프론트가 "data:image/...;base64," 헤더를 잘라내고 순수 base64만
+    // 보내는 경우가 실제로 있어서(클라이언트마다 관례가 다름), 접두사 유무와 무관하게
+    // 실제 바이트를 근거로 판단하는 쪽이 더 견고하다.
+    private static final byte[] PNG_MAGIC = {(byte) 0x89, 0x50, 0x4E, 0x47};
+    private static final byte[] JPEG_MAGIC = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+    private static final byte[] TIFF_LE_MAGIC = {0x49, 0x49, 0x2A, 0x00};
+    private static final byte[] TIFF_BE_MAGIC = {0x4D, 0x4D, 0x00, 0x2A};
 
     private final RestClient restClient;
     private final String apiUrl;
@@ -100,26 +109,61 @@ public class ClovaOcrClient {
     }
 
     /**
-     * "data:image/&lt;mime-subtype&gt;;base64,&lt;data&gt;" 형태만 허용한다. MIME 타입을
-     * 알 수 없는 원시 base64는 어떤 포맷으로 보내야 할지 몰라 형식 자체를 거부한다.
+     * "data:image/&lt;mime-subtype&gt;;base64,&lt;data&gt;" 형태면 그 MIME 타입을 그대로 쓴다.
+     * 접두사가 없는 순수 base64면, 디코딩한 실제 바이트의 매직 넘버로 포맷을 추정한다.
      */
-    private ParsedImage parseDataUri(String imageBase64) {
+    ParsedImage parseDataUri(String imageBase64) {
         Matcher matcher = DATA_URI_PATTERN.matcher(imageBase64);
-        if (!matcher.matches()) {
-            log.warn("event=clova_ocr_unsupported_image_format reason=no_data_uri_prefix");
-            throw new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED);
+        if (matcher.matches()) {
+            String mimeSubtype = matcher.group(1).toLowerCase();
+            String format = MIME_SUBTYPE_TO_CLOVA_FORMAT.get(mimeSubtype);
+            if (format == null) {
+                log.warn("event=clova_ocr_unsupported_image_format mimeSubtype={}", mimeSubtype);
+                throw new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED);
+            }
+            return new ParsedImage(format, matcher.group(2));
         }
 
-        String mimeSubtype = matcher.group(1).toLowerCase();
-        String format = MIME_SUBTYPE_TO_CLOVA_FORMAT.get(mimeSubtype);
+        String format = sniffFormatFromBytes(imageBase64);
         if (format == null) {
-            log.warn("event=clova_ocr_unsupported_image_format mimeSubtype={}", mimeSubtype);
+            log.warn("event=clova_ocr_unsupported_image_format reason=unrecognized_bytes");
             throw new BusinessException(JudgmentErrorCode.EXTRACTION_FAILED);
         }
-        return new ParsedImage(format, matcher.group(2));
+        return new ParsedImage(format, imageBase64);
     }
 
-    private record ParsedImage(String format, String data) {
+    private String sniffFormatFromBytes(String base64) {
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+        if (startsWith(bytes, PNG_MAGIC)) {
+            return "png";
+        }
+        if (startsWith(bytes, JPEG_MAGIC)) {
+            return "jpg";
+        }
+        if (startsWith(bytes, TIFF_LE_MAGIC) || startsWith(bytes, TIFF_BE_MAGIC)) {
+            return "tiff";
+        }
+        return null;
+    }
+
+    private boolean startsWith(byte[] data, byte[] prefix) {
+        if (data.length < prefix.length) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length; i++) {
+            if (data[i] != prefix[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    record ParsedImage(String format, String data) {
     }
 
     private record OcrRequest(String version, String requestId, long timestamp, List<OcrImage> images) {
